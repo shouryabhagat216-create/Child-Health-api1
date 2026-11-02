@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: childhealth
+      POSTGRES_PASSWORD: childhealth
+      POSTGRES_DB: childhealth
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U childhealth -d childhealth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      DB_MODE: postgres
+      DATABASE_URL: postgres://childhealth:childhealth@db:5432/childhealth
+    ports:
+      - "3000:3000"
+    command: sh -c "node src/db/migrate.js && node src/server.js"
+
+volumes:
+  pgdata:
