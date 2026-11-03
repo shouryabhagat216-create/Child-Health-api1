@@ -9,6 +9,7 @@ class MemoryRepository {
     this.abhaLinks = new Map(); // keyed by child id
     this.careContexts = new Map();
     this.consents = new Map();
+    this.auditEvents = [];
   }
 
   async insertChild(child) {
@@ -90,6 +91,24 @@ class MemoryRepository {
     const updated = { ...current, ...patch };
     this.consents.set(id, updated);
     return { ...updated, hiTypes: [...updated.hiTypes] };
+  }
+
+  async listRemindersByChild(childId) {
+    return [...this.reminders.values()]
+      .filter((r) => r.childId === childId)
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+      .map((r) => ({ ...r }));
+  }
+
+  async insertAuditEvent(event) {
+    this.auditEvents.push({ ...event });
+    return { ...event };
+  }
+
+  async listAuditEvents(childId, actorGuardianId) {
+    return this.auditEvents
+      .filter((e) => e.childId === childId && e.actorGuardianId === actorGuardianId)
+      .map((e) => ({ ...e }));
   }
 
   async ping() {

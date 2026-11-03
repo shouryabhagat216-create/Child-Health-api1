@@ -21,9 +21,11 @@ The assessment asks that AI-generated code is clearly identified. This file is t
 
 Update the "Review status" column (and add new rows) as you read, run and change each file.
 Anything you later write or rewrite yourself should be noted as such.
+| FHIR, fetch and audit (Batch 3) | `backend/src/fhir/mapper.js`, `services/auditService.js`, `db/migrations/004_audit_events.sql`, fetch code in `services/abdmService.js`, `routes/abdm.js`, `tests/fhir-and-audit.test.js` | Pending review |
 
 ## Verification done so far (by running, not by reading)
 
-- Batch 1 and 2: 59 Jest tests pass against the in-memory repository.
-- Migrations 002 and 003 were applied to a local PostgreSQL 16 database and the endpoints were exercised with curl against it.
+- Batch 1 and 2: 71 Jest tests pass against the in-memory repository.
+- Migrations 002, 003 and 004 were applied to a local PostgreSQL 16 database and the endpoints were exercised with curl against it.
 - Not yet verified: the official ABDM docs were read for the milestone descriptions and API paths, but nothing here has been validated against the real ABDM sandbox. The ABDM code is a mock.
+- The FHIR bundle is core FHIR R4 structure only. The ABDM FHIR profile page could not be fetched, so nothing is validated against the ABDM implementation guide and no ABDM-profile compliance is claimed.

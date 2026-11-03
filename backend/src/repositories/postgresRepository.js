@@ -56,6 +56,18 @@ const toConsent = (row) => ({
   createdAt: iso(row.created_at),
 });
 
+const toAuditEvent = (row) => ({
+  id: row.id,
+  requestId: row.request_id,
+  eventType: row.event_type,
+  actorGuardianId: row.actor_guardian_id,
+  childId: row.child_id,
+  consentId: row.consent_id,
+  outcome: row.outcome,
+  reasonCode: row.reason_code,
+  createdAt: iso(row.created_at),
+});
+
 // All queries are parameterized ($1, $2, ...) so user input is never concatenated into SQL.
 class PostgresRepository {
   constructor(pool) {
@@ -188,6 +200,33 @@ class PostgresRepository {
       [id, patch.status, patch.decidedAt || null, patch.revokedAt || null]
     );
     return rows[0] ? toConsent(rows[0]) : null;
+  }
+
+  async listRemindersByChild(childId) {
+    const { rows } = await this.pool.query(
+      'SELECT * FROM reminders WHERE child_id = $1 ORDER BY due_date, id',
+      [childId]
+    );
+    return rows.map(toReminder);
+  }
+
+  async insertAuditEvent(e) {
+    const { rows } = await this.pool.query(
+      `INSERT INTO audit_events
+         (id, request_id, event_type, actor_guardian_id, child_id, consent_id, outcome, reason_code, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [e.id, e.requestId, e.eventType, e.actorGuardianId, e.childId, e.consentId, e.outcome, e.reasonCode, e.createdAt]
+    );
+    return toAuditEvent(rows[0]);
+  }
+
+  async listAuditEvents(childId, actorGuardianId) {
+    const { rows } = await this.pool.query(
+      `SELECT * FROM audit_events WHERE child_id = $1 AND actor_guardian_id = $2
+        ORDER BY created_at, id`,
+      [childId, actorGuardianId]
+    );
+    return rows.map(toAuditEvent);
   }
 
   async ping() {

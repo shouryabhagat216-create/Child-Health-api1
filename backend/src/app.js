@@ -18,6 +18,7 @@ const { childrenRouter } = require('./routes/children');
 const { remindersRouter } = require('./routes/reminders');
 const { createAbdmService } = require('./services/abdmService');
 const { createMockGateway } = require('./abdm/mockGateway');
+const { createAuditService } = require('./services/auditService');
 const { abdmRouter } = require('./routes/abdm');
 
 // App factory: dependencies are injected so tests can use an in-memory repository
@@ -50,13 +51,15 @@ function createApp({ repo, generateId = randomUUID, logRequests = true, config =
     config,
   });
 
+  const auditService = createAuditService({ repo });
+
   app.use('/health', healthRouter({ repo }));
   app.use('/auth', authRouter({ tokens, loginLimiter }));
   app.use('/children', generalLimiter, requireAuth, childrenRouter({ childService }));
   app.use('/reminders', generalLimiter, requireAuth, remindersRouter({ reminderService }));
 
   // MOCK ABDM prototype (synthetic data, no connection to the real ABDM).
-  app.use('/abdm', generalLimiter, requireAuth, abdmRouter({ abdmService }));
+  app.use('/abdm', generalLimiter, requireAuth, abdmRouter({ abdmService, auditService }));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -2,6 +2,7 @@ const { randomUUID } = require('crypto');
 const { AppError, NotFoundError, ForbiddenError, ValidationError } = require('../errors');
 const { findOwnedChild } = require('./ownership');
 const { MOCK_OTP, CONSENT_STATUS: S } = require('../abdm/constants');
+const { toImmunizationBundle } = require('../fhir/mapper');
 const { syntheticAbhaFor, maskAbha, syntheticAbhaAddress } = require('../abdm/syntheticAbha');
 
 const MAX_OTP_ATTEMPTS = 3;
@@ -213,7 +214,53 @@ function createAbdmService({ repo, gateway, config, now = () => new Date() }) {
       );
     },
 
-    // Used by the health-information fetch (Batch 3). Reads the live status every time, so a
+    // M2 (HIP side) data transfer, simulated: a consented requester fetches the child's
+    // immunisation records as a FHIR Bundle. In the real flow the HIP pushes ENCRYPTED pages to the
+    // requester's data-push URL; the mock returns the bundle directly and does NOT encrypt it.
+    async fetchHealthInformation(consentId, guardianId, scenario) {
+      const owned = await findOwnedConsent(consentId, guardianId);
+      return gateway.execute(
+        scenario,
+        'healthInformation.fetch',
+        async () => {
+          // 1. The live consent status is checked on every call, so a revocation applies at once.
+          const consent = await this.assertConsentUsable(consentId, owned.childId);
+          const child = await findOwnedChild(repo, owned.childId, guardianId);
+          // 2. The guardian's consent to WombTo18 processing must also be 'granted' before
+          //    anything is shared outside. (Reminders only block 'revoked'; sharing is stricter.)
+          if (child.consentStatus !== 'granted') {
+            throw new ForbiddenError('CONSENT_REVOKED', 'The guardian has not granted consent to share this child\'s data');
+          }
+          if (!consent.hiTypes.includes('ImmunizationRecord')) {
+            throw new ForbiddenError('CONSENT_NOT_GRANTED', 'Consent does not cover ImmunizationRecord');
+          }
+          const abha = await requireAbha(child.id);
+          if (!(await repo.listCareContextsByChild(child.id)).length) {
+            throw new AppError(409, 'CARE_CONTEXT_NOT_LINKED', 'Link the care context before sharing records');
+          }
+          // 3. Data minimisation: only completed vaccinations inside the consented date range.
+          const immunizations = (await repo.listRemindersByChild(child.id)).filter(
+            (r) => r.reminderStatus === 'completed' && r.dueDate >= consent.dateFrom && r.dueDate <= consent.dateTo
+          );
+          const bundle = toImmunizationBundle({
+            child,
+            abhaNumberMasked: abha.abhaNumberMasked,
+            immunizations,
+            now: now(),
+          });
+          return {
+            transactionId: randomUUID(),
+            consentId,
+            encrypted: false,
+            recordCount: immunizations.length,
+            bundle,
+          };
+        },
+        { idempotent: true }
+      );
+    },
+
+    // Used by the health-information fetch. Reads the live status every time, so a
     // revocation blocks access immediately - there is no cached "granted" anywhere.
     async assertConsentUsable(consentId, childId) {
       const consent = await repo.findConsentById(consentId);
