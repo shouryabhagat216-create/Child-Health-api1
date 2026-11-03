@@ -21,8 +21,14 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1h',
   // Only this origin (the React dev server by default) may call the API from a browser.
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  // Mock ABDM gateway behaviour (see src/abdm/mockGateway.js).
+  // Mock ABDM gateway behaviour (see src/abdm/mockGateway.js) plus the optional REAL sandbox client.
   abdm: {
+    mode: process.env.ABDM_MODE === 'sandbox' ? 'sandbox' : 'mock',
+    clientId: process.env.ABDM_CLIENT_ID || '',
+    clientSecret: process.env.ABDM_CLIENT_SECRET || '',
+    gatewayBaseUrl: process.env.ABDM_GATEWAY_BASE_URL || 'https://dev.abdm.gov.in',
+    cmId: process.env.ABDM_CM_ID || 'sbx',
+    timeoutMs: 10000,
     maxAttempts: Number(process.env.ABDM_MOCK_MAX_ATTEMPTS) || 3,
     retryDelayMs: process.env.ABDM_MOCK_RETRY_DELAY_MS ? Number(process.env.ABDM_MOCK_RETRY_DELAY_MS) : 200,
     consentDefaultDays: 30,

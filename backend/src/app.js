@@ -20,11 +20,13 @@ const { createAbdmService } = require('./services/abdmService');
 const { createMockGateway } = require('./abdm/mockGateway');
 const { createAuditService } = require('./services/auditService');
 const { abdmRouter } = require('./routes/abdm');
+const { sandboxRouter } = require('./routes/sandbox');
+const { createSandboxClient } = require('./abdm/sandboxClient');
 
 // App factory: dependencies are injected so tests can use an in-memory repository
 // and a fixed id generator (needed to test the duplicate-id check).
 // `config` can be overridden in tests (e.g. a tiny rate limit).
-function createApp({ repo, generateId = randomUUID, logRequests = true, config = defaults }) {
+function createApp({ repo, generateId = randomUUID, logRequests = true, config = defaults, sandboxClient }) {
   const app = express();
 
   app.use(requestId);
@@ -53,6 +55,11 @@ function createApp({ repo, generateId = randomUUID, logRequests = true, config =
 
   const auditService = createAuditService({ repo });
 
+  // The real sandbox client exists only when ABDM_MODE=sandbox (or a test injects a fake one).
+  // Creating it checks the credentials and that the host is the sandbox, not production.
+  const sandbox =
+    sandboxClient || (config.abdm.mode === 'sandbox' ? createSandboxClient({ config: config.abdm }) : null);
+
   app.use('/health', healthRouter({ repo }));
   // The mock login hands out tokens to synthetic users, so it must never exist in production.
   // With it off, production has no way to log in until a real identity provider is added.
@@ -61,6 +68,9 @@ function createApp({ repo, generateId = randomUUID, logRequests = true, config =
   }
   app.use('/children', generalLimiter, requireAuth, childrenRouter({ childService }));
   app.use('/reminders', generalLimiter, requireAuth, remindersRouter({ reminderService }));
+
+  // Real ABDM sandbox checks (off unless ABDM_MODE=sandbox).
+  app.use('/sandbox', generalLimiter, requireAuth, sandboxRouter({ sandboxClient: sandbox }));
 
   // MOCK ABDM prototype (synthetic data, no connection to the real ABDM).
   app.use('/abdm', generalLimiter, requireAuth, abdmRouter({ abdmService, auditService }));
