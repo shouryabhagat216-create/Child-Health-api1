@@ -22,7 +22,7 @@ export default function SandboxPanel({ child, guardian }) {
         ))}
       </nav>
       {tab === 'create' && <CreateAbha child={child} guardian={guardian} />}
-      {tab === 'login' && <LoginAbha child={child} />}
+      {tab === 'login' && <LoginAbha child={child} goTo={setTab} />}
       {tab === 'hip' && <HipPanel child={child} />}
       {tab === 'hiu' && <HiuPanel child={child} />}
     </>

@@ -87,3 +87,107 @@ th, td { text-align: left; padding: 4px 10px; border-bottom: 1px solid var(--bor
 .card-image { max-width: 100%; width: 460px; border: 1px solid var(--border); border-radius: 8px; }
 .code { font-size: 1.4rem; letter-spacing: 0.2em; }
 fieldset { border: 1px solid var(--border); border-radius: 6px; }
+
+/* ---- layout fixes: nothing spills sideways on a narrow screen ---- */
+.container, .card, .step { min-width: 0; }
+.tabs { overflow-x: auto; scrollbar-width: thin; }
+.tabs button { flex: none; white-space: nowrap; }
+.childbar label { flex-wrap: wrap; min-width: 0; }
+.childbar select { max-width: 100%; }
+img { max-width: 100%; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input, select, button { min-height: 38px; }
+.form { max-width: 480px; }
+@media (max-width: 600px) { .form { max-width: none; } .childbar { padding: 10px 12px; } .childbar select { width: 100%; } }
+
+/* ---- stepper ---- */
+.stepper { display: flex; flex-wrap: wrap; gap: 4px 0; list-style: none; padding: 0; margin: 10px 0 16px; counter-reset: s; }
+.stepper li { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.85rem; }
+.stepper li:not(:last-child)::after { content: ''; width: 24px; height: 2px; background: var(--border); margin: 0 8px; }
+.stepper .dot { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border); font-size: 0.75rem; font-weight: 700; }
+.stepper li.now { color: var(--text); font-weight: 600; }
+.stepper li.now .dot { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.stepper li.done { color: var(--good); }
+.stepper li.done .dot { border-color: var(--good); background: var(--good); color: var(--card); }
+@media (max-width: 520px) { .stepper li:not(.now) .label { display: none; } .stepper li:not(:last-child)::after { width: 12px; margin: 0 4px; } }
+
+/* ---- alerts ---- */
+.alert { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-left-width: 4px; border-radius: 6px; padding: 10px 12px; margin: 10px 0; background: var(--bg); }
+.alert .icon { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 0.75rem; font-weight: 700; color: var(--card); background: currentColor; }
+.alert .icon { color: inherit; }
+.alert.error { border-left-color: var(--bad); } .alert.error .icon { background: var(--bad); color: var(--card); }
+.alert.warning { border-left-color: var(--warn); } .alert.warning .icon { background: var(--warn); color: var(--card); }
+.alert.info { border-left-color: var(--accent); } .alert.info .icon { background: var(--accent); color: var(--on-accent); }
+.alert.success { border-left-color: var(--good); } .alert.success .icon { background: var(--good); color: var(--card); }
+.alert strong { display: block; }
+
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+button.quiet { border-color: transparent; padding: 2px 8px; min-height: 0; font-size: 0.8rem; }
+button.link { border: none; background: none; padding: 0; min-height: 0; text-decoration: underline; }
+button.link:hover:not(:disabled) { background: none; color: var(--accent); }
+
+/* ---- one-time password boxes ---- */
+.otp { display: flex; gap: 8px; margin: 6px 0 10px; }
+.otp input { width: 46px; height: 52px; padding: 0; text-align: center; font-size: 1.4rem; border-radius: 8px; }
+@media (max-width: 380px) { .otp { gap: 5px; } .otp input { width: 40px; height: 48px; } }
+
+/* ---- choice cards ---- */
+.choices { display: grid; gap: 8px; border: none; padding: 0; margin: 0; }
+.choices legend { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; padding: 0; }
+.choice { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--border); border-radius: 8px; padding: 12px; cursor: pointer; background: var(--bg); }
+.choice input { margin-top: 3px; min-height: 0; }
+.choice > span { display: grid; gap: 2px; }
+.choice.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* ---- fields ---- */
+.field { display: grid; gap: 4px; font-size: 0.85rem; }
+.field-row { display: flex; gap: 8px; }
+.field-row input { flex: 1; min-width: 0; }
+.field .hint { color: var(--muted); font-size: 0.8rem; }
+.field input.invalid { border-color: var(--bad); }
+.count { font-variant-numeric: tabular-nums; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.actions .grow { flex: 1; }
+h2 + .lead { margin-top: 0; }
+.lead { color: var(--muted); margin: 0 0 8px; }
+.sectionhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.envchip { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; border-radius: 999px; padding: 2px 10px; border: 1px solid var(--bad); color: var(--bad); }
+
+/* ---- profile card ---- */
+.profile { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); overflow: hidden; margin: 10px 0; }
+.profile header { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.avatar { flex: none; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 1.1rem; }
+.profile .who { flex: 1; min-width: 180px; }
+.profile h3 { margin: 0; font-size: 1.1rem; }
+.abha-number { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.abha-number code { font-size: 1.05rem; letter-spacing: 0.04em; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.details { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 16px; margin: 0; padding: 14px 16px; }
+.details dt { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.details dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.lock { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.accounts { display: grid; gap: 6px; margin: 8px 0; }
+.account { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+.skeleton { height: 90px; border-radius: 12px; background: linear-gradient(90deg, var(--bg), var(--border), var(--bg)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; margin: 10px 0; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+.cardbox { display: grid; gap: 8px; justify-items: start; margin: 10px 0; }
+
+/* ---- numbered steps, status lines, code box, small form bits ---- */
+.numbered { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 12px; }
+.num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 0.75rem; margin-right: 6px; }
+.statuses { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin: 8px 0; }
+.statusline { display: inline-flex; gap: 6px; align-items: center; }
+.inlinefield { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+.codebox { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; border: 1px dashed var(--accent); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+.codebox .code { font-size: 1.8rem; letter-spacing: 0.3em; font-weight: 700; }
+.terms { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; background: var(--bg); margin: 8px 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.chips button { border-radius: 999px; }
+
+/* older form rules make every label a grid: cards and checkboxes keep their own layout */
+.form .choice, .choices .choice, .form .check, .steps .check { display: flex; gap: 12px; font-size: inherit; }
+.form .check, .steps .check { gap: 8px; }
+.choice input[type=radio], .check input[type=checkbox] { flex: none; width: 18px; height: 18px; min-height: 0; margin-top: 3px; }
