@@ -17,6 +17,9 @@ module.exports = {
   databaseUrl:
     process.env.DATABASE_URL ||
     'postgres://childhealth:childhealth@localhost:5432/childhealth',
+  // Number of reverse proxies in front of the app (a tunnel or load balancer = 1). Needed so rate
+  // limiting sees the real client IP. Leave unset when running with no proxy.
+  trustProxy: process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) : false,
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1h',
   // Only this origin (the React dev server by default) may call the API from a browser.

@@ -29,6 +29,7 @@ const { createSandboxClient } = require('./abdm/sandboxClient');
 function createApp({ repo, generateId = randomUUID, logRequests = true, config = defaults, sandboxClient }) {
   const app = express();
 
+  if (config.trustProxy) app.set('trust proxy', config.trustProxy);
   app.use(requestId);
   app.use(helmet());
   // Browsers may only call the API from the configured frontend origin.

@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy to config/facilities.json (git-ignored) and fill in. One entry per facility. Never hardcode ids in code.",
+  "facilities": {
+    "demo": {
+      "serviceId": "REPLACE_WITH_FACILITY_OR_SERVICE_ID",
+      "hipName": "CHIPDEMO",
+      "type": "HIP",
+      "alias": ["chipdemo"]
+    }
+  }
+}
