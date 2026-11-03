@@ -6,6 +6,9 @@ class MemoryRepository {
   constructor() {
     this.children = new Map();
     this.reminders = new Map();
+    this.abhaLinks = new Map(); // keyed by child id
+    this.careContexts = new Map();
+    this.consents = new Map();
   }
 
   async insertChild(child) {
@@ -34,6 +37,59 @@ class MemoryRepository {
     }
     this.reminders.set(reminder.id, { ...reminder });
     return { ...reminder };
+  }
+
+  // ---- MOCK ABDM data ----
+
+  async upsertAbhaLink(link) {
+    const existing = this.abhaLinks.get(link.childId);
+    const saved = { ...link, id: existing ? existing.id : link.id };
+    this.abhaLinks.set(link.childId, saved);
+    return { ...saved };
+  }
+
+  async findAbhaLinkByChildId(childId) {
+    const link = this.abhaLinks.get(childId);
+    return link ? { ...link } : null;
+  }
+
+  async insertCareContext(cc) {
+    const duplicate = [...this.careContexts.values()].some(
+      (c) => c.childId === cc.childId && c.reference === cc.reference
+    );
+    if (duplicate) throw new ConflictError(`Care context '${cc.reference}' is already linked`);
+    this.careContexts.set(cc.id, { ...cc });
+    return { ...cc };
+  }
+
+  async listCareContextsByChild(childId) {
+    return [...this.careContexts.values()].filter((c) => c.childId === childId).map((c) => ({ ...c }));
+  }
+
+  async insertConsent(consent) {
+    this.consents.set(consent.id, { ...consent });
+    return { ...consent };
+  }
+
+  async findConsentById(id) {
+    const c = this.consents.get(id);
+    return c ? { ...c, hiTypes: [...c.hiTypes] } : null;
+  }
+
+  async listConsentsByChild(childId) {
+    return [...this.consents.values()]
+      .filter((c) => c.childId === childId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((c) => ({ ...c, hiTypes: [...c.hiTypes] }));
+  }
+
+  // patch: { status, decidedAt?, revokedAt? }
+  async updateConsent(id, patch) {
+    const current = this.consents.get(id);
+    if (!current) return null;
+    const updated = { ...current, ...patch };
+    this.consents.set(id, updated);
+    return { ...updated, hiTypes: [...updated.hiTypes] };
   }
 
   async ping() {

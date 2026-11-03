@@ -21,6 +21,13 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1h',
   // Only this origin (the React dev server by default) may call the API from a browser.
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  // Mock ABDM gateway behaviour (see src/abdm/mockGateway.js).
+  abdm: {
+    maxAttempts: Number(process.env.ABDM_MOCK_MAX_ATTEMPTS) || 3,
+    retryDelayMs: process.env.ABDM_MOCK_RETRY_DELAY_MS ? Number(process.env.ABDM_MOCK_RETRY_DELAY_MS) : 200,
+    consentDefaultDays: 30,
+    consentMaxDays: 90, // data minimisation: consent cannot be requested for longer than this
+  },
   rateLimit: {
     windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
     max: Number(process.env.RATE_LIMIT_MAX) || 300,

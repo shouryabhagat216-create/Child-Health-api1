@@ -7,6 +7,7 @@ const TEST_CONFIG = {
   jwtSecret: 'test-only-secret',
   jwtExpiresIn: '1h',
   corsOrigin: 'http://localhost:5173',
+  abdm: { maxAttempts: 3, retryDelayMs: 0, consentDefaultDays: 30, consentMaxDays: 90 },
   rateLimit: { windowMs: 60 * 1000, max: 1000, loginMax: 1000 },
 };
 

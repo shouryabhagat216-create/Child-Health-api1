@@ -16,6 +16,9 @@ const { createReminderService } = require('./services/reminderService');
 const { healthRouter } = require('./routes/health');
 const { childrenRouter } = require('./routes/children');
 const { remindersRouter } = require('./routes/reminders');
+const { createAbdmService } = require('./services/abdmService');
+const { createMockGateway } = require('./abdm/mockGateway');
+const { abdmRouter } = require('./routes/abdm');
 
 // App factory: dependencies are injected so tests can use an in-memory repository
 // and a fixed id generator (needed to test the duplicate-id check).
@@ -41,10 +44,19 @@ function createApp({ repo, generateId = randomUUID, logRequests = true, config =
   const reminderService = createReminderService({ repo });
 
   // Public: /health (for load balancer checks) and the mock login. Everything else needs a token.
+  const abdmService = createAbdmService({
+    repo,
+    gateway: createMockGateway(config.abdm),
+    config,
+  });
+
   app.use('/health', healthRouter({ repo }));
   app.use('/auth', authRouter({ tokens, loginLimiter }));
   app.use('/children', generalLimiter, requireAuth, childrenRouter({ childService }));
   app.use('/reminders', generalLimiter, requireAuth, remindersRouter({ reminderService }));
+
+  // MOCK ABDM prototype (synthetic data, no connection to the real ABDM).
+  app.use('/abdm', generalLimiter, requireAuth, abdmRouter({ abdmService }));
 
   app.use(notFoundHandler);
   app.use(errorHandler);
