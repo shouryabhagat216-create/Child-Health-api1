@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 
@@ -30,6 +31,12 @@ module.exports = {
     clientId: process.env.ABDM_CLIENT_ID || '',
     clientSecret: process.env.ABDM_CLIENT_SECRET || '',
     gatewayBaseUrl: process.env.ABDM_GATEWAY_BASE_URL || 'https://dev.abdm.gov.in',
+    // ABHA (M1) service, a different host from the gateway above.
+    abhaBaseUrl: process.env.ABDM_ABHA_BASE_URL || 'https://abhasbx.abdm.gov.in',
+    // Facilities this software serves (git-ignored file; see src/abdm/facilities.js).
+    facilitiesFile: process.env.ABDM_FACILITIES_FILE || path.join(__dirname, '../../config/facilities.json'),
+    // Public https address of this server (the bridge). The data push URLs we give to providers are built from it.
+    publicBaseUrl: (process.env.ABDM_PUBLIC_BASE_URL || '').replace(/\/$/, ''),
     cmId: process.env.ABDM_CM_ID || 'sbx',
     timeoutMs: 10000,
     maxAttempts: Number(process.env.ABDM_MOCK_MAX_ATTEMPTS) || 3,

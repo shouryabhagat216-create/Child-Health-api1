@@ -1,0 +1,134 @@
+# ABDM M1 integration plan (CHIP, Child Health API)
+
+Status: **PLAN ONLY. Nothing built, no M1 sandbox call made.** Written 2026-11-03.
+Progress: 4 of 12 steps done (33%); step 6 in progress. Open question 3 answered: the M1 certificate endpoint accepts the current gateway token (no 900908 on M1 so far).
+Sources: abdm-docs MCP (catalogue 2026.09.16), skill `abdm-m1` (`.claude/skills/abdm-m1/`), repo survey of `backend/src`.
+Never put a token, secret, Aadhaar number, OTP or patient identifier in this file.
+
+## Goal and scope
+
+Role: facility/application side of M1 (identity), with a guardian acting for a child. Behind one switch, `ABDM_MODE=mock|sandbox`, which already exists in `backend/src/config/index.js`. Mock stays the default and keeps working.
+
+In scope (functionalities with mandatory cases, from the skill router):
+1. Create ABHA by Aadhaar OTP (CRT_ABHA_101..116) - the guardian's own Aadhaar, never the child's.
+2. Log in with ABHA number (VRFY_ABHA_101, 201) - this is the real replacement for today's mock `verifyAbha`.
+3. Log in with ABHA address (VRFY_ABHA_102, 202).
+4. Find a forgotten ABHA by mobile (VRFY_ABHA_301..308).
+5. Log in with Aadhaar OTP (VRFY_ABHA_401..405).
+6. One ABHA number per patient record (TAGGING_UNIQUEPATIENTID_UNIQUEABHANUMBER).
+7. Scan and share at a counter (SHARE_PATIENT_PROFILE_701, 702) - needs a public callback URL, so **blocked** (see below).
+
+Out of scope for now: functionalities 8 to 15 (optional), 16 and 17 (government only), face/biometric/driving licence routes, M2/M3/M4 changes.
+
+Child-specific route (`enrol/byAadhaar` with `authMethods: child`, doc `hiecm.flow.m1-create-child-abha`): available only to **approved government integrators**. Not planned unless NHA approval exists. Until then a child's ABHA is created by the guardian in the ABHA app/portal and verified here by ABHA number (functionality 2).
+
+## Open questions (need the owner)
+
+1. ~~Entity type~~ **Answered 2026-11-03: private.** Effects: CRT_ABHA_114 (view/download the ABHA card as returned by the API) is mandatory and CRT_ABHA_115 is optional; functionalities 16 (demographic auth) and 17 (benefits) do not apply; the consent language drops the word "government"; no `BENEFIT_NAME` header is needed unless NHA approves a benefit later.
+2. **Store the full ABHA number?** Today `abha_links` keeps only a masked number (`abha_number_masked`), which cannot support login-by-number, M2 linking, or CRT_ABHA_113 (show the 14-digit number). Recommendation: add `abha_number` and keep masking in logs, audit and list responses. Aadhaar and OTP stay never-stored regardless. Needs a yes before step 8.
+3. Does the M1 API (`abhasbx.abdm.gov.in`) accept the current client credentials? The gateway `900908` (subscription validation) may apply to M1 as well. Step 1 finds out.
+4. Is there a public HTTPS URL for callbacks (scan and share)? If not, functionality 7 stays blocked.
+
+## Design (decisions)
+
+**Switch.** One interface, two implementations, chosen once in `createApp`:
+- `src/abdm/abha/abhaProvider.js` - the contract: `requestOtp`, `verifyOtp`, `loginByAbhaNumber...`, `getProfile`, `getCard`, `suggestAddresses`, `createAddress`.
+- `src/abdm/abha/mockAbhaProvider.js` - wraps today's synthetic logic (`syntheticAbha.js`, OTP `123456`). Existing `/abdm/*` routes and all 97 tests keep using it unchanged.
+- `src/abdm/abha/sandboxAbhaProvider.js` - real calls to `https://abhasbx.abdm.gov.in`, built on the existing `sandboxClient.getToken()` for the gateway session token.
+- `src/services/abhaService.js` - ownership check (`findOwnedChild`), transaction state, audit, then delegates to the provider. New routes `src/routes/abha.js` mounted at `/abha`; responses carry `X-ABDM-Mode: MOCK|SANDBOX` like today.
+- Sandbox host allow-list extended with `abhasbx.abdm.gov.in` in `sandboxClient.js` style; production hosts stay refused.
+
+**Encryption.** Aadhaar, ABHA number, mobile, email and OTP are RSA-encrypted in our backend only, then base64. Fetch `GET /abha/api/v3/profile/public/certificate`, read `encryptionAlgorithm` from the response, refuse an unknown value, cache with an expiry (not forever). Use Node `crypto.publicEncrypt` with OAEP and `oaepHash: 'sha1'`; add PEM armour to the base64 DER. Prove the padding with the `abdm-prove-encryption` skill before building flows.
+
+**Hard rules from the owner (enforced by structure and tests):**
+- Aadhaar numbers and OTPs are never stored or logged. They exist only in the request-handling scope. Error handler and zod messages must not echo values; `requestLogger` already logs no bodies. Add tests that grep captured logs, the audit table and the repository for a sentinel Aadhaar/OTP after a full flow.
+- Facility IDs come from config (`config.abdm.facilityId` from env), never literals in code or tests. `backend/config/facilities.json` is git-ignored; document the key in `.env.example`.
+- `.env` is never read by this work; only `.env.example` is edited.
+- All 97 existing tests keep passing; new tests are added beside them.
+
+**Transactions and tokens.** `txnId`, masked mobile, resend count and attempts live in a server-side map keyed by `txnId`, bound to `guardianId` + `childId`, with a TTL (same pattern as `linkTransactions`; Redis/DB table later). The user token (`X-token`) and refresh token stay server-side, short-lived, never returned to the browser, never persisted. Browser gets only our own opaque handle.
+
+**Screen rules to honour** (cases in brackets): consent text word for word before Aadhaar is sent, stored with who/when (CRT_ABHA_102); 12-digit check with "Aadhaar Number is not valid" and no call (104); six-digit OTP, ABDM message shown as returned (105, 107); wrong OTP keeps `txnId` (107); resend after 60 s, max 2, third shows "Maximum OTP resend attempts reached. Please try again after 30 mins", resend reuses `txnId` (106); communication mobile same as Aadhaar mobile skips second OTP (108, 109); at least 3 address suggestions plus custom address rules (112); `isNew: false` is not an error (113, 114); name/DOB/gender read-only after fill (VRFY_ABHA_101); only `ABDM-1114` on a login means nobody holds an ABHA - never create on any other refusal; creation by Aadhaar only (a guard refuses other methods by name); journey completes without an ABHA ("not now" exit; child record stays valid).
+
+**Returning patient / one ABHA per record (CRT_ABHA_116, functionality 6).** `abha_links.child_id` is already UNIQUE; add a unique constraint on the ABHA number so one ABHA cannot attach to two children, and a match-before-create step.
+
+**Callbacks.** Scan and share posts to `/api/v3/hip/patient/share` on the bridge URL. Needs a public URL registered via the bridge, which is currently blocked by `403 900908`. Marked blocked; mock equivalent can be built meanwhile.
+
+## Steps
+
+| # | Step | Exit condition | Status | Evidence | Date |
+|---|---|---|---|---|---|
+| 1 | Probe M1 access: one read-only `GET /abha/api/v3/profile/public/certificate` with the gateway token | 200 with `publicKey` and `encryptionAlgorithm`, or a recorded refusal code | done | 200, fields `publicKey` + `encryptionAlgorithm` = `RSA/ECB/OAEPWithSHA-1AndMGF1Padding`; REQUEST-ID `5f3993bf-b3ee-4c45-ad86-50860f1cce29` | 2026-11-03 |
+| 2 | Prove RSA padding against the sandbox (`abdm-prove-encryption`) | An encrypted value accepted (e.g. OTP request returns `txnId`) | done | Real sandbox: `POST /abha/api/v3/enrollment/request/otp` with an encrypted Aadhaar returned 200 + txnId + masked mobile (ABDM REQUEST-ID `db182108-fe32-4833-846c-8ad1b2454b9f`); encryption accepted | 2026-11-04 |
+| 3 | Config + switch: `abhaProvider` contract, mock provider, factory in `createApp`, host allow-list, `facilityId` in config and `.env.example` | `npm test` still 97 passing; unit test for factory and for refusing production hosts | done (switch not yet wired into `createApp`; nothing uses it until step 6) | `src/abdm/abha/index.js`, `tests/abhaProvider.test.js`; `npm test`: 105 passing (97 + 8 new) | 2026-11-03 |
+| 4 | Encryption module + certificate cache | Unit tests: OAEP/SHA-1 round trip with a test key, unknown algorithm refused, cache expiry | done | `src/abdm/abha/encryption.js`; round trip, unknown algorithm refused, cache expiry tested | 2026-11-03 |
+| 5 | Redaction tests | Sentinel Aadhaar/OTP absent from logs, audit rows, repo and error bodies across mock flows | done | `tests/redaction.test.js` (mock flows) and the redaction test in `tests/abhaCreate.test.js` (Aadhaar and OTP sentinels absent from logs, responses, repo, audit) | 2026-11-03 |
+| 6 | Create ABHA by Aadhaar OTP: routes, service, consent record, resend/attempt rules, `isNew:false` path, address step, profile, card | CRT_ABHA_101..116 mapped; mock end-to-end tests; sandbox exit literals pasted | in progress: backend slice built and unit tested (request OTP, verify OTP, resend rules, consent gate, 12-digit check): `POST /abha/children/:childId/create/request-otp` and `/verify-otp`. Not yet: suggestions, address, mobile verify, profile/card, persistence, screens, real sandbox run. 114 tests passing | | |
+| 7 | Log in with ABHA number (Aadhaar OTP and mobile OTP) replacing mock verify for `ABDM_MODE=sandbox` | VRFY_ABHA_101, 201 tests (mock) and sandbox profile fetch | pending | | |
+| 8 | Persistence: migration 005 (`abha_number`, unique, `kyc_verified`, consent record table) - **needs open question 2** | Migration applies; `unique ABHA per child` test | pending | | |
+| 9 | Login by ABHA address, find by mobile, login by Aadhaar OTP | VRFY_ABHA_102/202, 301..308, 401..405 | pending | | |
+| 10 | Frontend: consent, Aadhaar/OTP screens, account chooser, confirm-the-form, honest states, MOCK/SANDBOX label | Manual run recorded; screens map to cases | pending | | |
+| 11 | Scan and share (callback) | POST arrives at callback with counter id | **blocked**: public URL and bridge subscription (`900908`, raised with ABDM support) | | |
+| 12 | Functional test run: `/abdm-test m1` on one final build with NHA workbook in `abdm-ft/` | Workbook and report; run log linked here | pending | | |
+
+Update this table after every step: status, evidence (request id, passing test, file), date, and the percentage above.
+
+## Baseline
+
+2026-11-03: `cd backend && npm test` gives 6 suites, 97 tests, all passing.
+
+## M2 and M3 (added 2026-11-03, skills `abdm-m2`, `abdm-m3` loaded)
+
+Role: HIP for M2, HIU for M3. Both are callback driven and both need, before the first call: the facility registered in the HFR with a valid HFR ID, that HIP ID linked to the client ID (NHPR portal or M4 APIs), and a callback URL set with the Update Bridge API. The bridge call is the one refused with `403 900908`, so every M2 and M3 step below is **blocked** until ABDM support fixes the subscription.
+
+| # | Step | Exit condition | Status |
+|---|---|---|---|
+| 13 | Preflight for M2/M3 (`abdm-preflight`): HFR ID, HIP-client link, bridge callback URL reachable and watched | Each item checked and observed | blocked: bridge `900908`; no facilities file at the default path |
+| 14 | M2 as HIP: link token, HIP-initiated linking, user-initiated linking callbacks, data push (Curve25519 + HKDF + AES-GCM), FHIR per NRCeS | 13 M2 cases in `.claude/skills/abdm-m2/references/test-matrix.md` | blocked by 13; prototype M2 is still the mock |
+| 15 | M3 as HIU: consent request, artefacts (one per HIP), data push URL and decryption | 16 M3 cases in `.claude/skills/abdm-m3/references/test-matrix.md` | blocked by 13; prototype M3 is still the mock |
+
+Preflight observed 2026-11-03: local clock equals the ABDM server `Date` header; server up on port 3000; `ABDM_MODE=sandbox`, client id/secret and a public URL are set (presence only, values not read); no facilities file at `backend/config/facilities.json`.
+
+### Bridge finding (2026-11-03)
+
+The `900908` came from the old v1 paths (`/gateway/v1/bridges...`) that `src/abdm/bridgeAdmin.js` uses. The current docs (`shared.sandbox.sandbox-to-hip-or-hiu-id`) use V3: `PATCH /api/hiecm/gateway/v3/bridge/url` (set callback URL), `GET /api/hiecm/gateway/v3/bridge-services`. Read-only `GET .../v3/bridge-services` returned **200** (REQUEST-ID `fb685c58-ee44-4434-97df-f8f5a81f4243`): a bridge URL is already set and active, it does **not** match the current `ABDM_PUBLIC_BASE_URL`, and `services` is empty (no facility linked). Next: update the callback URL on V3 (needs the owner's go-ahead), register the facility (NHPR portal or M4), link it as HIP/HIU (NHPR portal or M4 `POST /v1/bridges/MutipleHRPAddUpdateServices` on `apihspsbx.abdm.gov.in/v4/int`), then port `bridgeAdmin.js` to V3.
+
+Update 2026-11-04: ran `backend/scripts/bridge-url-v3.js --apply` (by the owner). `PATCH /api/hiecm/gateway/v3/bridge/url` returned **202**; `GET bridge-services` then showed ABDM holding our tunnel host (was `webhook.site`), bridge active, 0 services. The V3 write path is **not** blocked by `900908`. Tunnel is a quick `trycloudflare.com` address: it changes on every `cloudflared` restart, so re-run the script after a restart. Remaining blocker for M2/M3: a facility ID (NHPR portal or M4) linked as HIP/HIU.
+
+Update 2026-11-04: Create ABHA by Aadhaar OTP is now built end to end for the sandbox (request OTP, verify OTP, address suggestions, create address, profile, card) behind `/abha/children/:childId/create/...`; 117 tests passing. Real run script for the owner: `backend/scripts/abha-create-run.sh` (Aadhaar and OTP typed hidden by the person, never stored). M2/M3 still need a facility ID; M1 does not.
+
+Update 2026-11-04 (real run 1): OTP request succeeded. Verify was refused `400 Invalid Mobile Number` (ABDM REQUEST-ID `57ca8c14-5e25-4254-90c3-107bc6a51844`): although the spec lists `mobile` as optional, the sandbox needs the 10-digit mobile to link. Fix: the run script now asks for it and sends it; resume with `CHILD=<id> TXN=<txnId> ./scripts/abha-create-run.sh`. Service should require `mobile` (CRT_ABHA_108/109) - to do.
+
+Update 2026-11-04 (real run 2, **passed**): Create ABHA by Aadhaar OTP against the sandbox, through the prototype. OTP verify 200 (ABDM REQUEST-ID `37f5d6fc-0a0d-4823-98cc-911843bd5e5c`, `isNew` true, "Account created successfully", 14-digit ABHA number returned); address suggestions 200 with 10 entries (`c3051974-e566-414c-a61c-c7ce113e61ba`); create address 200 (`0f8d7995-f4b6-475f-9741-032aa8787cf0`); profile 200, `kycVerified` true (`556b196d-ce22-4027-be96-9aa632c21ae2`); card 200 saved as PNG. Maps to CRT_ABHA_101, 104, 105, 107, 108, 112, 113, 114 (screen-side checks still need the UI). Fixes made after the run: profile call field names (`preferredAbhaAddress`, `dayOfBirth/monthOfBirth/yearOfBirth`), mobile masked in responses. Still open for step 6: mobile verify for a non-Aadhaar mobile (CRT_ABHA_109), second-OTP resend UI, persistence, screens, returning-patient match (CRT_ABHA_116).
+
+Update 2026-11-04: Login with an ABHA number is built for the sandbox (`/abha/children/:childId/login/request-otp`, `/login/verify-otp`, then `/login/profile` and `/login/card`; both OTP routes, Aadhaar `aadhaar` and ABHA-mobile `mobile`); 126 tests passing. Uses the final user token returned with `refreshToken`, no exchange call; ABDM-1114 passed through untouched. Real run script: `backend/scripts/abha-login-run.sh`. Real sandbox run: **not yet done** (needs the owner's ABHA number and OTP). Not yet: the "update the ABHA mobile" Yes/No (PROF_ABHA_601), filling the registration form, saving the ABHA to the child record, screens.
+
+Update 2026-11-04 (experiment): tried linking a made-up facility id `IN0000000001` as HIP with `backend/scripts/link-test-facility.js --apply` (`POST /v4/int/v1/bridges/MutipleHRPAddUpdateServices` on the sandbox registry). The call returned **HTTP 200 with an error in the body**: code `2500`, "facility id is not registered in HFR or invalid"; `bridge-services` still shows 0 services. So the sandbox does **not** accept an unregistered facility id on this path, contrary to a community claim. Note: this endpoint reports failure in the body, so always read the body. Remaining routes for M2/M3: (a) register a real test facility in the HFR (NHPR portal, or M4 with a facility manager HP-ID, Aadhaar entered on the registry's hosted page), (b) ask ABDM support one focused question: whether a test HFR facility id can be issued or declared for sandbox testing.
+
+Update 2026-11-04 (M2/M3 build started, offline): 
+- Done: `backend/src/abdm/fidelius.js` - Curve25519 (Weierstrass SPKI), nonce split, HKDF-SHA256, AES-256-GCM with the tag appended, sender (HIP) and receiver (HIU) sides; `tests/fidelius.test.js` (10 tests): curve base point on the derived curve, SPKI with the EC and Curve25519 OIDs, peer key read from its trailing 65 bytes, round trip, tamper and wrong-key refusal, fresh key and nonce per transfer. **Not proven against a real Fidelius peer**: interop with ABDM is untested; the MD5 `checksum` encoding (hex vs base64) is not stated by the spec and still has to be settled. 136 tests passing in total.
+- Spec facts gathered: callbacks to our bridge are `/api/v3/hip/token/on-generate-token`, `/api/v3/link/on_carecontext`, `/api/v3/links/context/on-notify`, `/api/v3/patients/sms/on-notify`, `/api/v3/hip/patient/care-context/discover`, `/api/v3/hip/link/care-context/init|confirm`, `/api/v3/consent/request/hip/notify`, `/api/v3/hip/health-information/request`. Our replies go to `/api/hiecm/...` (see `.claude/skills/abdm-m2/references/scaffold.md`). Data push: `POST {dataPushUrl}` (the HIU's URL from the request, no gateway), entries `{content, media: application/fhir+json, checksum (MD5 of plaintext), careContextReference}` plus `keyMaterial`, `pageNumber`, `pageCount`, `transactionId`.
+- Callback authenticity (`hiecm.concept.callback-authenticity`): require a bearer token, require `X-HIP-ID`/`X-HIU-ID` to name one of our own facilities, and require `response.requestId` to match a REQUEST-ID we sent; reject and log otherwise, fail closed. Do not invent a signature check: how to verify the token is to be confirmed at onboarding.
+- Next (in order): callback guard + inbound routes (step 14), M2 HIP handlers (discover, init, confirm, consent notify, data request, push), link token and HIP-initiated linking client calls, then M3 HIU (consent request, artefacts, data push receiver), then the `mock|sandbox` switch for `abdmService`. All still need a registered facility ID to be proven on the real sandbox.
+
+Update 2026-11-04 (M2 HIP-initiated linking built, offline): 148 tests passing (12 suites).
+- New: `src/middleware/callbackGuard.js` (bearer token present, `X-HIP-ID`/`X-HIU-ID` names one of our facilities, fail closed, rejection logged without the body), `src/abdm/bridge/pendingRequests.js` (a callback is acted on only if its `response.requestId` is a call we sent, once, and for the matching kind), `src/abdm/facilities.js` (facility ids from the git-ignored file `backend/config/facilities.json`, or `ABDM_FACILITIES_FILE`; missing file = no facilities = everything refused), `src/abdm/hip/hipClient.js` (generate-token, link/carecontext, link/context/notify to `dev.abdm.gov.in` only), `src/services/hipLinkingService.js`, `src/routes/bridge.js` (`/api/v3/hip/token/on-generate-token`, `/api/v3/link/on_carecontext`), `src/routes/hip.js` (guardian API: `POST /hip/children/:childId/link-token`, `/link-care-context`, `GET /link-status`). The link token is kept in server memory per child (six-month validity), never returned, logged or audited.
+- Not done: the other inbound callbacks (discover, link init/confirm, consent notify, health-information request, sms/context notify results), the data push using `fidelius.js`, `link/context/notify`, persistence of the token and pending requests, M3, and the `mock|sandbox` switch for the old `/abdm/*` routes. Nothing here is proven on the real sandbox: it needs a registered facility id in `facilities.json` and linked to the bridge as HIP.
+- Callback token verification: still unspecified in the docs; confirm at onboarding.
+
+Update 2026-11-04 (M2 rest built, offline): 172 tests passing (13 suites). Fake ABDM client, made-up ids; **nothing proven on the real sandbox** (no registered facility id yet).
+- Inbound (all behind the callback guard, 202 at once, repeated REQUEST-ID dropped, work done after the 202): `/api/v3/hip/patient/care-context/discover`, `/api/v3/hip/link/care-context/init`, `.../confirm`, `/api/v3/consent/request/hip/notify`, `/api/v3/hip/health-information/request`. Replies go to the `/api/hiecm/...` on-* endpoints with `response.requestId` = the request answered.
+- Discovery matches only on the registered ABHA address + same name + same year of birth + guardian consent `granted` + not already linked. Link init holds a one-time code for the owning guardian to read once (`GET /hip/children/:childId/link-code`, stands in for an SMS: no SMS channel exists); only a salted hash is kept; 3 wrong codes end the attempt. Guardian registers the child's address with `POST /hip/children/:childId/abha-address`.
+- Data flow: consent notifications are remembered (GRANTED/REVOKED/EXPIRED/DENIED; unknown status or another facility ignored); a health-information request is refused unless the consent is GRANTED, unexpired, covers ImmunizationRecord and the dates fit; the `dataPushUrl` must be https to a real host name (no IP literal, localhost, internal name, credentials or odd port); the reply acknowledges first, then the bundle (completed vaccinations in range only, guardian consent also required) is encrypted with `fidelius.js` and pushed, then a TRANSFERRED/FAILED notification is sent.
+- Fixed: `count` in patient entries is the number of care contexts (ABDM-1037), not the number of vaccines.
+- Unverified assumptions (check on the real sandbox): `X-HIU-ID` header on on-discover (the docs say so); `ABDM-9999` with a readable message for no match / wrong code (the docs say the sandbox accepts it); error body shape on health-information on-request; MD5 checksum as hex; FHIR core R4 only (not NRCeS-validated); Fidelius interop with a real peer; the consent artefact signature is not verified.
+- Not done in M2: `link/context/notify` result callbacks, SMS notify, persistence of tokens, links, consents and pending requests (all in memory today), multi-page pushes, MEDIATED authentication.
+
+Update 2026-11-04 (M3 as a HIU built, offline): all tests passing (see the count in the summary below). Fake ABDM client and made-up ids; **nothing proven on the real sandbox** (needs a registered facility id linked as HIU).
+- New: `src/services/hiuService.js`, `src/routes/hiu.js` (guardian API under `/hiu`: `POST /children/:childId/consent-requests`, `GET` the same, `POST .../:requestId/refresh`, `POST .../:requestId/fetch`, `GET /children/:childId/records`), inbound callbacks in `src/routes/bridge.js` (`/api/v3/hiu/consent/request/on-init`, `.../on-status`, `/api/v3/hiu/consent/on-fetch`, `/api/v3/hiu/health-information/on-request`, `/api/v3/hiu/consent/request/notify`), and the records receiver `POST /api/v3/hiu/data-push/:token`.
+- Behaviour: consent request for the child's ABHA address with our HIU id (from the facilities file, type `HIU`); EVERY consent artefact id is kept (one per HIP); each is fetched; records are requested only on a GRANTED artefact whose detail names the same consent id; our key pair and nonce are fresh per request and the data push URL is a one-time capability URL (`ABDM_PUBLIC_BASE_URL` + random token) so a push can only land on the transfer it belongs to; the push needs a bearer token, is decrypted, each entry is checked against its MD5 checksum (hex or base64 accepted, since the spec does not say) and must be a FHIR Bundle; multiple pages are reported once after the last page; the HIU notify call reports RECEIVED or FAILED. A revocation drops the records held from that artefact and a later push is refused; records are hidden after `dataEraseAt`; the consent notification is acknowledged once per REQUEST-ID.
+- Unverified assumptions: the on-init, on-status, on-fetch and on-request body field names (read from the spec's flow descriptions, not from schemas); the `requester` and request-expiry fields of consent init (omitted: not stated); `curve25519` lower case in our request key material (as the sample); `ERRORED` as the failed hiStatus; FHIR content not validated against NRCeS; consent artefact signature not verified; Fidelius interop with a real peer.
+- Limits: everything is in memory (requests, artefacts, transfers, received records); the guardian-facing flow has no screens; received records are returned to the guardian as raw FHIR.
+
+Update 2026-11-04 (UI built): new tab **ABDM sandbox (real)** in the React dashboard (`frontend/src/components/sandbox/`), kept apart from the mock tab; the top banner changes to "ABDM SANDBOX" on it. Screens: Create ABHA (ABDM's consent text word for word with the "government" word removed for a private entity, five declarations with their own checkboxes and both confirmations; Aadhaar field hidden with "Aadhaar Number is not valid" and nothing sent; OTP field 6 digits; 60 s resend wait and at most 2 resends with the limit message; communication mobile; at least three address suggestions plus a free field with rules shown green/red and the "ABHA address already exists." choice; profile with name, date of birth and gender read only; card shown and downloadable; "not now" exit), Log in with an ABHA number (identifier first, then where the OTP goes; ABDM-1114 handled), Link records (M2), Consent and records (M3). Checked in the browser without any identity: banner, consent gating (Continue disabled until every required box is ticked; the "other document" box blocks it), the Aadhaar validation message with no request sent, tab rendering, phone width (no sideways scroll). The Aadhaar number, OTP and ABHA number live only in the screen's memory while a step needs them and are cleared after use; the API log shows responses only.
+- Not covered by the UI yet: a communication mobile that differs from the Aadhaar one (second OTP, CRT_ABHA_109), the Yes/No "update the ABHA mobile" prompt (PROF_ABHA_601), filling a patient registration form from the ABHA (CRT_ABHA_116 returning-patient matching), saving the ABHA to the child record, and the other logins. No automated frontend tests exist.

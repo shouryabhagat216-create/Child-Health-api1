@@ -5,6 +5,7 @@ import HealthPill from './components/HealthCard.jsx';
 import LoginPanel from './components/LoginPanel.jsx';
 import ChildrenPanel from './components/ChildrenPanel.jsx';
 import AbdmPanel from './components/AbdmPanel.jsx';
+import SandboxPanel from './components/sandbox/SandboxPanel.jsx';
 
 const MAX_LOG = 20;
 
@@ -41,13 +42,14 @@ export default function App() {
   const selected = children.find((c) => c.id === selectedId);
   const TABS = [
     ['children', 'Children'],
-    ['abdm', 'ABDM simulation'],
+    ['abdm', 'ABDM simulation (mock)'],
+    ['sandbox', 'ABDM sandbox (real)'],
     ['log', `API log${log.length ? ` (${log.length})` : ''}`],
   ];
 
   return (
     <>
-      <div className="banner">MOCK MODE · synthetic data only</div>
+      <div className={`banner${tab === 'sandbox' ? ' sandbox' : ''}`}>{tab === 'sandbox' ? 'ABDM SANDBOX · real calls to ABDM\'s test environment · use test identities only' : 'MOCK MODE · synthetic data only'}</div>
       <header className="topbar">
         <h1>Child Health Dashboard</h1>
         <div className="topbar-right">
@@ -96,6 +98,12 @@ export default function App() {
             {tab === 'abdm' && (
               selected
                 ? <AbdmPanel child={selected} scenario={scenario} />
+                : <section className="card"><p className="muted">Select or register a child first (Children tab).</p></section>
+            )}
+
+            {tab === 'sandbox' && (
+              selected
+                ? <SandboxPanel child={selected} guardian={guardian} />
                 : <section className="card"><p className="muted">Select or register a child first (Children tab).</p></section>
             )}
 

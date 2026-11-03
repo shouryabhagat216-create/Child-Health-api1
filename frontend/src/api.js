@@ -38,3 +38,31 @@ export async function api(method, path, { body, scenario } = {}) {
   listener({ method, path, scenario: headers['X-Mock-Scenario'] || null, status: result.status, data: redact(result.data) });
   return result;
 }
+
+// For binary answers such as the ABHA card image. Returns an object URL the page can show or download.
+export async function apiBlob(path) {
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  try {
+    const res = await fetch(`${BASE}${path}`, { headers });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      listener({ method: 'GET', path, scenario: null, status: res.status, data });
+      return { ok: false, status: res.status, data };
+    }
+    const blob = await res.blob();
+    listener({ method: 'GET', path, scenario: null, status: res.status, data: { contentType: blob.type, bytes: blob.size } });
+    return { ok: true, status: res.status, url: URL.createObjectURL(blob) };
+  } catch {
+    const data = { error: { code: 'NETWORK_ERROR', message: `Could not reach the API at ${BASE}. Is it running?` } };
+    listener({ method: 'GET', path, scenario: null, status: 0, data });
+    return { ok: false, status: 0, data };
+  }
+}
+
+// Shows what went wrong in ABDM's own words: the message as returned, and the code beside it.
+export function describeError(res) {
+  const e = (res && res.data && res.data.error) || {};
+  const fields = Array.isArray(e.details) ? e.details.map((d) => `${d.field}: ${d.message}`).join('; ') : '';
+  const code = (e.details && e.details.abdmCode) || e.code;
+  return `${fields || e.message || 'The request failed'}${code ? ` (${code})` : ''}`;
+}

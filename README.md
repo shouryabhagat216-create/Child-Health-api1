@@ -63,7 +63,7 @@ The backend allows browser calls only from `http://localhost:5173` (`CORS_ORIGIN
 cd backend
 npm test
 ```
-The tests use the in-memory repository, so no database is needed. Current result: **72 tests in 4 suites, all passing**.
+The tests use the in-memory repository, so no database is needed. Current result: **197 tests in 14 suites, all passing** (the ABDM sandbox code is tested against fake ABDM replies; see `INTEGRATION-PLAN.md` for what has and has not run against the real sandbox).
 
 ## API
 
@@ -184,7 +184,7 @@ Real screenshots from the author's own runs on 3 Nov 2026 (synthetic data, local
 
 | Screenshot | What it shows |
 |---|---|
-| [`test_passing.png`](docs/screenshots/test_passing.png) | `npm test`: 4 suites, 72 tests, all passing |
+| [`test_passing.png`](docs/screenshots/test_passing.png) | `npm test` on 3 Nov 2026: 4 suites, 72 tests, all passing (an older run; the suite is now larger) |
 | [`api_requests.png`](docs/screenshots/api_requests.png) | Terminal session: mock login, register a child (201), get the child, create a reminder (default status `scheduled`), and the start of an invalid request returning `400 Bad Request` |
 | [`invalid_request.png`](docs/screenshots/invalid_request.png) | The `400 VALIDATION_ERROR` body listing the bad or missing fields |
 | [`fhir_bundle.png`](docs/screenshots/fhir_bundle.png) | Dashboard (MOCK mode): all four ABDM steps ticked and the synthetic FHIR document Bundle returned for a granted consent |

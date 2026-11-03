@@ -68,3 +68,22 @@ button.selected { background: var(--accent); color: var(--on-accent); }
 table { border-collapse: collapse; width: 100%; font-size: 0.85rem; display: block; overflow-x: auto; }
 th, td { text-align: left; padding: 4px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 @media (max-width: 600px) { .container { padding: 12px; } .topbar { padding: 10px 12px; } }
+
+/* ABDM sandbox screens */
+.banner.sandbox { background: #fde7e4; color: #5c1a12; }
+@media (prefers-color-scheme: dark) { .banner.sandbox { background: #5a2018; color: #ffd9d3; } }
+.notice { border-left: 4px solid var(--warn); background: var(--bg); padding: 8px 12px; border-radius: 4px; }
+.small { font-size: 0.8rem; }
+.terms { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; padding: 10px; background: var(--bg); }
+.check { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+.check input { margin-top: 4px; }
+.check.indent { margin-left: 24px; }
+.progress { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 8px 0 12px; }
+.progress li { border: 1px solid var(--border); border-radius: 999px; padding: 2px 12px; font-size: 0.8rem; color: var(--muted); }
+.progress li.now { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+.rules { list-style: none; padding: 0; margin: 4px 0; font-size: 0.85rem; }
+.rules li::before { content: '\25CF  '; }
+.rules li.met { color: var(--good); } .rules li.unmet { color: var(--bad); } .rules li.neutral { color: var(--muted); }
+.card-image { max-width: 100%; width: 460px; border: 1px solid var(--border); border-radius: 8px; }
+.code { font-size: 1.4rem; letter-spacing: 0.2em; }
+fieldset { border: 1px solid var(--border); border-radius: 6px; }
