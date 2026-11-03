@@ -6,6 +6,6 @@
 | [`aws-deployment.md`](aws-deployment.md) | Task C | Plan only (nothing deployed): Fargate vs Lambda, ALB vs API Gateway, RDS, Secrets Manager, ACM, CloudWatch, backups, least-privilege IAM, pilot cost with assumptions |
 | [`security.md`](security.md) | Task D | 15 risks with mitigations, each marked implemented / partial / proposed; how one parent is kept away from another's child |
 | [`../README.md`](../README.md) | Task E | Setup, example requests and responses, an invalid-request example, tests, technical challenge |
-| `screenshots/` | Task E | **To be added by the author** from real runs (see the README, "Evidence") |
+| [`screenshots/`](screenshots/) | Task E | Real screenshots of the test run, API session, validation error, FHIR bundle and revoked consent (listed in the README, "Evidence") |
 
 Everything ABDM-related in this repo is a **local mock with synthetic data**. None of it is a live ABDM integration.

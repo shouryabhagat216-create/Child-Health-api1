@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 
-export default function HealthCard() {
+// Compact status pill for the header. Click it to re-check.
+export default function HealthPill() {
   const [health, setHealth] = useState(null);
 
   const load = async () => setHealth((await api('GET', '/health')).data);
@@ -9,19 +10,19 @@ export default function HealthCard() {
     load();
   }, []);
 
-  const ok = health && health.status === 'ok';
+  let label = 'API checking...';
+  let tone = 'warn';
+  if (health && health.error) {
+    label = 'API unreachable';
+    tone = 'bad';
+  } else if (health) {
+    const ok = health.status === 'ok';
+    label = ok ? 'API ok' : `API ${health.status} · database ${health.database}`;
+    tone = ok ? 'good' : 'bad';
+  }
   return (
-    <section className="card">
-      <h2>API health</h2>
-      {!health && <p className="muted">Checking...</p>}
-      {health && health.error && <p className="error">{health.error.message}</p>}
-      {health && !health.error && (
-        <p>
-          <span className={`badge ${ok ? 'good' : 'bad'}`}>{health.status}</span> database:{' '}
-          <strong>{health.database}</strong> · v{health.version}
-        </p>
-      )}
-      <button onClick={load}>Re-check</button>
-    </section>
+    <button className={`pill ${tone}`} onClick={load} title="Click to re-check /health">
+      <span className="dot" /> {label}
+    </button>
   );
 }

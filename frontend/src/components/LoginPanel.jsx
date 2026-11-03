@@ -7,7 +7,7 @@ const DEMO_GUARDIANS = [
   { username: 'rohit.verma', password: 'mock-password-2', label: 'Rohit Verma' },
 ];
 
-export default function LoginPanel({ guardian, onLogin, onLogout }) {
+export default function LoginPanel({ onLogin }) {
   const login = async (g) => {
     const res = await api('POST', '/auth/mock-login', { body: { username: g.username, password: g.password } });
     if (res.ok) {
@@ -16,29 +16,13 @@ export default function LoginPanel({ guardian, onLogin, onLogout }) {
     }
   };
 
-  if (guardian) {
-    return (
-      <section className="card">
-        <h2>Signed in</h2>
-        <p>{guardian.displayName}</p>
-        <button
-          onClick={() => {
-            setToken(null);
-            onLogout();
-          }}
-        >
-          Log out
-        </button>
-      </section>
-    );
-  }
   return (
-    <section className="card">
+    <section className="card login">
       <h2>Mock login</h2>
-      <p className="muted">Synthetic guardians only. This is not production authentication.</p>
+      <p className="muted">Demo accounts only, not production authentication.</p>
       <div className="row">
         {DEMO_GUARDIANS.map((g) => (
-          <button key={g.username} onClick={() => login(g)}>
+          <button key={g.username} className="primary" onClick={() => login(g)}>
             Log in as {g.label}
           </button>
         ))}

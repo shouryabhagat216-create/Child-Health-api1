@@ -31,20 +31,24 @@ export default function ChildrenPanel({ children, selectedId, onSelect, onChange
   };
 
   return (
+    <div className="grid2">
     <section className="card">
-      <h2>Children</h2>
+      <h2>Your children</h2>
       <ul className="list">
         {children.length === 0 && <li className="muted">No children yet for this guardian.</li>}
         {children.map((c) => (
           <li key={c.id}>
             <button className={c.id === selectedId ? 'selected' : ''} onClick={() => onSelect(c.id)}>
-              {c.name} · born {c.dateOfBirth} · consent {c.consentStatus}
+              {c.name} · born {c.dateOfBirth}
             </button>
           </li>
         ))}
       </ul>
 
-      <h3>Register a child (synthetic data only)</h3>
+    </section>
+
+    <section className="card">
+      <h2>Register a child</h2>
       <form onSubmit={register} className="form">
         <label>Name <input value={form.name} onChange={set('name')} /></label>
         <label>Date of birth <input type="date" value={form.dateOfBirth} onChange={set('dateOfBirth')} /></label>
@@ -59,12 +63,12 @@ export default function ChildrenPanel({ children, selectedId, onSelect, onChange
             <option>granted</option><option>pending</option><option>revoked</option>
           </select>
         </label>
-        <button type="submit">Register child</button>
+        <button type="submit" className="primary">Register child</button>
       </form>
 
       {selectedId && (
         <>
-          <h3>Add a vaccination reminder to the selected child</h3>
+          <h3>Add a vaccination reminder (selected child)</h3>
           <form onSubmit={addReminder} className="form">
             <label>Vaccine <input value={reminder.vaccineName} onChange={(e) => setReminder({ ...reminder, vaccineName: e.target.value })} /></label>
             <label>Due date <input type="date" value={reminder.dueDate} onChange={(e) => setReminder({ ...reminder, dueDate: e.target.value })} /></label>
@@ -74,7 +78,6 @@ export default function ChildrenPanel({ children, selectedId, onSelect, onChange
               </select>
             </label>
             <button type="submit">Add reminder</button>
-            <p className="muted">Only "completed" reminders are shared in the FHIR bundle.</p>
           </form>
         </>
       )}
@@ -86,5 +89,6 @@ export default function ChildrenPanel({ children, selectedId, onSelect, onChange
         </p>
       )}
     </section>
+    </div>
   );
 }

@@ -179,8 +179,16 @@ list. The cause was that the route only knew the consent id; the fix was to look
 - Nothing was deployed to AWS and no AWS cost was incurred; see `docs/aws-deployment.md`.
 - No automated tests exist for the frontend.
 
-## Evidence (to be added by the author)
-Screenshots are not committed yet. Capture them from your own runs and save them in `docs/screenshots/`:
-1. `npm test` output showing all tests passing (`backend/`).
-2. The `curl` session above: login, register, get, reminder, and the invalid request.
-3. The dashboard in MOCK mode: a granted consent with the FHIR bundle, then the refusal after revoking.
+## Evidence
+Real screenshots from the author's own runs on 3 Nov 2026 (synthetic data, local machine). Files are in [`docs/screenshots/`](docs/screenshots/).
+
+| Screenshot | What it shows |
+|---|---|
+| [`test_passing.png`](docs/screenshots/test_passing.png) | `npm test`: 4 suites, 72 tests, all passing |
+| [`api_requests.png`](docs/screenshots/api_requests.png) | Terminal session: mock login, register a child (201), get the child, create a reminder (default status `scheduled`), and the start of an invalid request returning `400 Bad Request` |
+| [`invalid_request.png`](docs/screenshots/invalid_request.png) | The `400 VALIDATION_ERROR` body listing the bad or missing fields |
+| [`fhir_bundle.png`](docs/screenshots/fhir_bundle.png) | Dashboard (MOCK mode): all four ABDM steps ticked and the synthetic FHIR document Bundle returned for a granted consent |
+| [`consent_revoked.png`](docs/screenshots/consent_revoked.png) | After the guardian revokes consent, fetching health information is refused with `CONSENT_NOT_GRANTED` |
+| [`dashboard.png`](docs/screenshots/dashboard.png) | Dashboard overview: the Children tab with the registration form |
+
+Not captured: a screenshot of the "other parent gets 404" case. That behaviour is covered by automated tests in `backend/tests/authorization.test.js` and `backend/tests/abdm.test.js`.

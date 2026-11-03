@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 
+const TABS = [
+  ['steps', 'Steps'],
+  ['fhir', 'FHIR data'],
+  ['audit', 'Audit trail'],
+];
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function AbdmPanel({ child, scenario }) {
@@ -11,6 +17,7 @@ export default function AbdmPanel({ child, scenario }) {
   const [bundle, setBundle] = useState(null);
   const [txn, setTxn] = useState(null);
   const [message, setMessage] = useState(null);
+  const [tab, setTab] = useState('steps');
   const [consentForm, setConsentForm] = useState({ purpose: 'CAREMGT', dateFrom: '2024-01-01', dateTo: today() });
 
   const base = `/abdm/children/${child.id}`;
@@ -65,70 +72,110 @@ export default function AbdmPanel({ child, scenario }) {
     setBundle(res.ok ? res.data.bundle : null);
   };
 
+  const granted = consents.some((c) => c.status === 'GRANTED');
+  const chips = [
+    ['1 · ABHA verified', !!abha],
+    ['2 · Care context linked', careContexts.length > 0],
+    ['3 · Consent granted', granted],
+    ['4 · FHIR fetched', !!bundle],
+  ];
+
   return (
-    <section className="card wide">
-      <h2>ABDM simulation for {child.name}</h2>
-      <p className="muted">
-        Scenario for the next action: <strong>{scenario}</strong> (change it in the header). Everything below is a
-        local mock; no real ABDM system is contacted.
-      </p>
+    <section className="card">
+      <h2>ABDM simulation · {child.name}</h2>
+      {scenario !== 'success' && (
+        <p className="muted">Next action runs with scenario <strong>{scenario}</strong>.</p>
+      )}
+      <div className="chips">
+        {chips.map(([label, done]) => (
+          <span key={label} className={`chip ${done ? 'done' : ''}`}>{done ? '✓' : '○'} {label}</span>
+        ))}
+      </div>
       {message && <p className={message.ok ? 'ok' : 'error'}>{message.text}</p>}
 
-      <h3>1. ABHA (M1)</h3>
-      <p>{abha ? <>Verified: <code>{abha.abhaNumberMasked}</code> · {abha.abhaAddress}</> : 'Not verified yet.'}</p>
-      <button onClick={verifyAbha}>Verify synthetic ABHA</button>
-
-      <h3>2. Care-context linking (M2)</h3>
-      <p>{careContexts.length ? careContexts.map((c) => c.display).join(', ') : 'Nothing linked yet.'}</p>
-      <div className="row">
-        <button onClick={linkInit}>Link: init</button>
-        <button onClick={linkConfirm} disabled={!txn}>Link: confirm with mock OTP</button>
+      <div className="tabs inner" role="tablist">
+        {TABS.map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
+            {label}{id === 'audit' && audit.length ? ` (${audit.length})` : ''}
+          </button>
+        ))}
       </div>
 
-      <h3>3. Consent (a simulated requester asks the guardian)</h3>
-      <form onSubmit={requestConsent} className="form">
-        <label>Purpose
-          <select value={consentForm.purpose} onChange={(e) => setConsentForm({ ...consentForm, purpose: e.target.value })}>
-            <option>CAREMGT</option><option>PUBHLTH</option><option>HPAYMT</option>
-          </select>
-        </label>
-        <label>Data from <input type="date" value={consentForm.dateFrom} onChange={(e) => setConsentForm({ ...consentForm, dateFrom: e.target.value })} /></label>
-        <label>Data to <input type="date" value={consentForm.dateTo} onChange={(e) => setConsentForm({ ...consentForm, dateTo: e.target.value })} /></label>
-        <button type="submit">Request consent</button>
-      </form>
-      <ul className="list">
-        {consents.map((c) => (
-          <li key={c.id} className="consent">
-            <span className={`badge ${c.status === 'GRANTED' ? 'good' : c.status === 'REQUESTED' ? 'warn' : 'bad'}`}>{c.status}</span>{' '}
-            {c.purpose} · {c.dateFrom} to {c.dateTo} · expires {c.expiresAt.slice(0, 10)}
+      {tab === 'steps' && (
+        <div className="steps">
+          <div className="step">
+            <h3>1. ABHA verification (M1)</h3>
+            <p>{abha ? <>Verified: <code>{abha.abhaNumberMasked}</code> · {abha.abhaAddress}</> : 'Not verified yet.'}</p>
+            <button onClick={verifyAbha}>Verify synthetic ABHA</button>
+          </div>
+
+          <div className="step">
+            <h3>2. Care-context linking (M2)</h3>
+            <p>{careContexts.length ? careContexts.map((c) => c.display).join(', ') : 'Nothing linked yet.'}</p>
             <div className="row">
-              <button onClick={() => act('POST', `/abdm/consents/${c.id}/approve`)}>Approve</button>
-              <button onClick={() => act('POST', `/abdm/consents/${c.id}/deny`)}>Deny</button>
-              <button onClick={() => act('POST', `/abdm/consents/${c.id}/revoke`)}>Revoke</button>
-              <button onClick={() => fetchInfo(c.id)}>Fetch health information</button>
+              <button onClick={linkInit}>Link: init</button>
+              <button onClick={linkConfirm} disabled={!txn}>Link: confirm with mock OTP</button>
             </div>
-          </li>
-        ))}
-      </ul>
+          </div>
 
-      <h3>4. FHIR bundle (synthetic, core R4 shape, not validated against ABDM profiles)</h3>
-      {bundle ? <pre className="json">{JSON.stringify(bundle, null, 2)}</pre> : <p className="muted">Fetch health information with a granted consent to see it.</p>}
+          <div className="step">
+            <h3>3. Consent</h3>
+            <form onSubmit={requestConsent} className="form inline">
+              <label>Purpose
+                <select value={consentForm.purpose} onChange={(e) => setConsentForm({ ...consentForm, purpose: e.target.value })}>
+                  <option>CAREMGT</option><option>PUBHLTH</option><option>HPAYMT</option>
+                </select>
+              </label>
+              <label>From <input type="date" value={consentForm.dateFrom} onChange={(e) => setConsentForm({ ...consentForm, dateFrom: e.target.value })} /></label>
+              <label>To <input type="date" value={consentForm.dateTo} onChange={(e) => setConsentForm({ ...consentForm, dateTo: e.target.value })} /></label>
+              <button type="submit">Request consent</button>
+            </form>
+            <ul className="list">
+              {consents.length === 0 && <li className="muted">No consent requests yet.</li>}
+              {consents.map((c) => (
+                <li key={c.id} className="consent">
+                  <div>
+                    <span className={`badge ${c.status === 'GRANTED' ? 'good' : c.status === 'REQUESTED' ? 'warn' : 'bad'}`}>{c.status}</span>{' '}
+                    {c.purpose} · {c.dateFrom} to {c.dateTo}
+                  </div>
+                  <div className="row">
+                    <button disabled={c.status !== 'REQUESTED'} onClick={() => act('POST', `/abdm/consents/${c.id}/approve`)}>Approve</button>
+                    <button disabled={c.status !== 'REQUESTED'} onClick={() => act('POST', `/abdm/consents/${c.id}/deny`)}>Deny</button>
+                    <button disabled={c.status !== 'GRANTED'} onClick={() => act('POST', `/abdm/consents/${c.id}/revoke`)}>Revoke</button>
+                    <button className="primary" onClick={async () => { await fetchInfo(c.id); setTab('fhir'); }}>Fetch health information</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
-      <h3>5. Audit trail (your actions on this child)</h3>
-      {audit.length === 0 ? <p className="muted">No events yet.</p> : (
-        <table>
-          <thead><tr><th>Time</th><th>Event</th><th>Outcome</th><th>Reason</th></tr></thead>
-          <tbody>
-            {audit.map((e) => (
-              <tr key={e.id}>
-                <td>{e.createdAt.replace('T', ' ').slice(0, 19)}</td>
-                <td>{e.eventType}</td>
-                <td><span className={`badge ${e.outcome === 'SUCCESS' ? 'good' : e.outcome === 'DENIED' ? 'warn' : 'bad'}`}>{e.outcome}</span></td>
-                <td>{e.reasonCode || ''}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {tab === 'fhir' && (
+        <div>
+          <p className="muted">Synthetic FHIR R4-style bundle, not validated against ABDM profiles.</p>
+          {bundle
+            ? <pre className="json">{JSON.stringify(bundle, null, 2)}</pre>
+            : <p className="muted">Nothing fetched yet.</p>}
+        </div>
+      )}
+
+      {tab === 'audit' && (
+        audit.length === 0 ? <p className="muted">No events yet.</p> : (
+          <table>
+            <thead><tr><th>Time</th><th>Event</th><th>Outcome</th><th>Reason</th></tr></thead>
+            <tbody>
+              {audit.map((e) => (
+                <tr key={e.id}>
+                  <td>{e.createdAt.replace('T', ' ').slice(0, 19)}</td>
+                  <td>{e.eventType}</td>
+                  <td><span className={`badge ${e.outcome === 'SUCCESS' ? 'good' : e.outcome === 'DENIED' ? 'warn' : 'bad'}`}>{e.outcome}</span></td>
+                  <td>{e.reasonCode || ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
       )}
     </section>
   );
