@@ -1,0 +1,20 @@
+{
+  "name": "child-health-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MOCK-mode dashboard for the Child Health API (WombTo18 assessment)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.2.1",
+    "vite": "^8.3.5"
+  }
+}

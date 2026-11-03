@@ -101,6 +101,16 @@ describe('guardian ownership', () => {
   });
 });
 
+describe('mock login in production', () => {
+  test('is not available when NODE_ENV is production (404)', async () => {
+    const app = makeApp({ ...TEST_CONFIG, nodeEnv: 'production' });
+    await anonymousRequest(app)
+      .post('/auth/mock-login')
+      .send({ username: NEHA.username, password: NEHA.password })
+      .expect(404);
+  });
+});
+
 describe('rate limiting and CORS', () => {
   test('login is rate limited and returns the standard error shape (429)', async () => {
     const app = makeApp({ ...TEST_CONFIG, rateLimit: { windowMs: 60000, max: 1000, loginMax: 3 } });

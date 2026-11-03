@@ -22,10 +22,14 @@ The assessment asks that AI-generated code is clearly identified. This file is t
 Update the "Review status" column (and add new rows) as you read, run and change each file.
 Anything you later write or rewrite yourself should be noted as such.
 | FHIR, fetch and audit (Batch 3) | `backend/src/fhir/mapper.js`, `services/auditService.js`, `db/migrations/004_audit_events.sql`, fetch code in `services/abdmService.js`, `routes/abdm.js`, `tests/fhir-and-audit.test.js` | Pending review |
+| Dashboard (Batch 4) | `frontend/` (Vite config, `src/api.js`, `src/App.jsx`, `src/components/`, `src/styles.css`, `src/states.js`) | Pending review |
+| Documentation (Batch 5) | `README.md`, `docs/README.md`, `docs/abdm-integration.md`, `docs/aws-deployment.md`, `docs/security.md` | Pending review. AWS cost figures are rough estimates from general knowledge, not live pricing |
 
 ## Verification done so far (by running, not by reading)
 
-- Batch 1 and 2: 71 Jest tests pass against the in-memory repository.
+- Batches 1 to 3: 72 Jest tests pass against the in-memory repository.
 - Migrations 002, 003 and 004 were applied to a local PostgreSQL 16 database and the endpoints were exercised with curl against it.
 - Not yet verified: the official ABDM docs were read for the milestone descriptions and API paths, but nothing here has been validated against the real ABDM sandbox. The ABDM code is a mock.
 - The FHIR bundle is core FHIR R4 structure only. The ABDM FHIR profile page could not be fetched, so nothing is validated against the ABDM implementation guide and no ABDM-profile compliance is claimed.
+- Batch 4: the React dashboard builds (`npm run build`) and was driven by hand in a browser against the API in memory mode: login, register child, add reminder, verify ABHA, link care context, request and approve consent, fetch the FHIR bundle, then revoke and see the fetch refused. The browser console showed only the expected 403.
+- No automated frontend tests exist yet.

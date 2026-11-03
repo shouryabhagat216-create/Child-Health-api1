@@ -54,7 +54,11 @@ function createApp({ repo, generateId = randomUUID, logRequests = true, config =
   const auditService = createAuditService({ repo });
 
   app.use('/health', healthRouter({ repo }));
-  app.use('/auth', authRouter({ tokens, loginLimiter }));
+  // The mock login hands out tokens to synthetic users, so it must never exist in production.
+  // With it off, production has no way to log in until a real identity provider is added.
+  if (config.nodeEnv !== 'production') {
+    app.use('/auth', authRouter({ tokens, loginLimiter }));
+  }
   app.use('/children', generalLimiter, requireAuth, childrenRouter({ childService }));
   app.use('/reminders', generalLimiter, requireAuth, remindersRouter({ reminderService }));
 

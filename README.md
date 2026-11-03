@@ -1,87 +1,104 @@
 # Child Health API
 
-Backend service for the WombTo18 second-round technical assessment (AWS Cloud Migration & ABDM Integration Intern).
+WombTo18 second-round technical assessment (AWS Cloud Migration & ABDM Integration Intern), by Shourya Bhagat.
 
-It lets an authorized application register a child, retrieve a child's basic health profile and create a vaccination reminder. **All data is synthetic.** No real child health records, production credentials or live ABDM systems are used.
+A small REST API for registering children and creating vaccination reminders, with a **mock** ABDM
+prototype (ABHA verification, care-context linking, consent, FHIR output, audit) and a React
+dashboard. **All data is synthetic. Nothing here talks to the real ABDM, and nothing is deployed to AWS.**
 
-> AI assistance is disclosed in [`AI_USAGE.md`](AI_USAGE.md).
+> AI assistance is disclosed in [`AI_USAGE.md`](AI_USAGE.md). Files are marked reviewed only after the author has read and run them.
+
+## What is in the repo
+
+| Path | What |
+|---|---|
+| `backend/` | Node.js + Express API, PostgreSQL, tests (Task A, plus the ABDM mock) |
+| `frontend/` | React + Vite dashboard, always labelled MOCK |
+| `docs/abdm-integration.md` | Task B: ABDM integration design |
+| `docs/aws-deployment.md` | Task C: AWS deployment plan (not deployed) |
+| `docs/security.md` | Task D: security risks and mitigations |
 
 ## Stack
+Node.js 18+ (developed on a newer version), Express 4, PostgreSQL 16 (in-memory mode for quick runs
+and tests), Zod validation, JWT (`jsonwebtoken`), `express-rate-limit`, Jest + Supertest, React + Vite.
 
-- Node.js 18+ and Express 4
-- PostgreSQL 16 (an in-memory mode is available for quick runs and tests)
-- Zod for request validation, Jest + Supertest for tests
-- React frontend and ABDM M1/M2/M3 modules: added in later steps (see Roadmap)
+## Setup (macOS)
 
-## Run it locally
+### 1. Database (pick one)
+**Option A, in-memory (no database, data lost on restart; easiest):** nothing to install. Use `DB_MODE=memory` below.
 
-### Option A: everything in Docker
-
+**Option B, PostgreSQL with Homebrew:**
 ```bash
-docker compose up --build
-curl http://localhost:3000/health
+brew install postgresql@16
+brew services start postgresql@16
 ```
-
-### Option B: API on your machine, Postgres in Docker
-
+Create the database only if it does not exist yet:
 ```bash
-docker compose up -d db
-cd backend
-cp .env.example .env
-npm install
-npm run migrate
-npm run dev
+psql -d postgres -c "CREATE ROLE childhealth LOGIN PASSWORD 'childhealth'"
+createdb -O childhealth childhealth
 ```
+These are local development credentials, not secrets.
 
-### Option C: no database at all (in-memory)
+**Option C, Docker:** `docker compose up -d db` (needs Docker Desktop, which was not installed on the author's machine).
 
+### 2. Backend
 ```bash
 cd backend
+cp .env.example .env        # then edit values; .env is git-ignored, never commit it
 npm install
-DB_MODE=memory npm start
+npm run migrate             # applies migrations 001 to 004 (skip in memory mode)
+npm run dev                 # http://localhost:3000   (or: DB_MODE=memory npm run dev)
 ```
 
-## Run the tests
+### 3. Frontend (second terminal tab)
+```bash
+cd frontend
+npm install
+npm run dev                 # http://localhost:5173
+```
+The backend allows browser calls only from `http://localhost:5173` (`CORS_ORIGIN`).
 
+### 4. Tests
 ```bash
 cd backend
-npm install
 npm test
 ```
-
-The tests use the in-memory repository, so no database is needed.
+The tests use the in-memory repository, so no database is needed. Current result: **72 tests in 4 suites, all passing**.
 
 ## API
 
+All routes except `/health` and `/auth/mock-login` need `Authorization: Bearer <token>`.
+`/auth/mock-login` exists only outside production and uses synthetic guardians.
+
 | Method | Endpoint | Description | Success | Errors |
 |---|---|---|---|---|
-| GET | `/health` | API and database health | 200 | 503 if the database is down |
-| POST | `/children` | Register a child | 201 | 400, 409 |
-| GET | `/children/:id` | Get a child's profile | 200 | 400 (bad id), 404 |
-| POST | `/reminders` | Create a vaccination reminder | 201 | 400, 403, 404 |
+| GET | `/health` | API and database health (public) | 200 | 503 if the database is down |
+| POST | `/auth/mock-login` | Mock login for synthetic guardians | 200 | 400, 401, 429 |
+| POST | `/children` | Register a child (owned by the logged-in guardian) | 201 | 400, 401, 409 |
+| GET | `/children` | List the logged-in guardian's children | 200 | 401 |
+| GET | `/children/:id` | Get a child's profile | 200 | 400, 401, 404 |
+| POST | `/reminders` | Create a vaccination reminder | 201 | 400, 401, 403, 404 |
+| | `/abdm/...` | **MOCK** ABDM prototype, see [`docs/abdm-integration.md`](docs/abdm-integration.md) | | |
 
 Errors always use one shape:
-
 ```json
 { "error": { "code": "VALIDATION_ERROR", "message": "...", "details": [], "requestId": "..." } }
 ```
 
-### Register a child
-
+### Example session (synthetic data)
 ```bash
-curl -X POST http://localhost:3000/children \
+# 1. Log in as a synthetic guardian and keep the token
+TOKEN=$(curl -s -X POST http://localhost:3000/auth/mock-login \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "Aarav Sharma",
-    "dateOfBirth": "2024-03-15",
-    "guardianName": "Neha Sharma",
-    "state": "Maharashtra",
-    "consentStatus": "granted"
-  }'
+  -d '{"username":"neha.sharma","password":"mock-password-1"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+
+# 2. Register a child
+curl -X POST http://localhost:3000/children \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"Aarav Sharma","dateOfBirth":"2024-03-15","guardianName":"Neha Sharma","state":"Maharashtra","consentStatus":"granted"}'
 ```
-
 Response `201 Created` (example values):
-
 ```json
 {
   "id": "3f6c1c0e-8a43-4b0e-9d52-5b1d6a7a9c11",
@@ -93,37 +110,24 @@ Response `201 Created` (example values):
   "createdAt": "2026-11-03T10:15:42.123Z"
 }
 ```
-
-### Get a child
-
 ```bash
-curl http://localhost:3000/children/3f6c1c0e-8a43-4b0e-9d52-5b1d6a7a9c11
-```
+# 3. Get the child (use the id from step 2)
+curl http://localhost:3000/children/<id> -H "Authorization: Bearer $TOKEN"
 
-### Create a vaccination reminder
-
-```bash
+# 4. Create a vaccination reminder
 curl -X POST http://localhost:3000/reminders \
-  -H "Content-Type: application/json" \
-  -d '{
-    "childId": "3f6c1c0e-8a43-4b0e-9d52-5b1d6a7a9c11",
-    "vaccineName": "MMR-1",
-    "dueDate": "2025-03-15"
-  }'
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"childId":"<id>","vaccineName":"MMR-1","dueDate":"2025-03-15"}'
 ```
+The reminder comes back as `201` with `reminderStatus` defaulting to `"scheduled"`.
 
-Response `201 Created`: the reminder with `reminderStatus` defaulting to `"scheduled"`.
-
-### Example of an invalid request
-
+### Invalid request example
 ```bash
 curl -i -X POST http://localhost:3000/children \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Aarav Sharma", "dateOfBirth": "15-03-2024"}'
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"Aarav Sharma","dateOfBirth":"15-03-2024"}'
 ```
-
 Response `400 Bad Request`:
-
 ```json
 {
   "error": {
@@ -140,28 +144,43 @@ Response `400 Bad Request`:
 }
 ```
 
+### Other behaviours worth knowing
+- **Missing child:** `404 CHILD_NOT_FOUND`. A child owned by another guardian gives the *same* 404.
+- **Duplicate child id:** `409 DUPLICATE_RESOURCE`. Ids are generated by the server; sending your own `id` is a `400`.
+- **Revoked consent:** creating a reminder returns `403 CONSENT_REVOKED`. `pending` is deliberately still allowed for reminders (sharing records outside is stricter and needs `granted`).
+- **Too many requests:** `429 RATE_LIMITED`.
+
 ## Design notes
+- **Layers:** routes (HTTP) → services (business rules) → repositories (storage). The repository has Postgres and in-memory versions behind the same methods, so tests need no database.
+- **Validation:** strict Zod schemas; real calendar dates; date of birth not in the future; state must be an Indian state or union territory; unknown fields rejected.
+- **Ownership:** each child belongs to the guardian who registered it (`children.guardian_id`, migration 002).
+- **Privacy:** the access log never records request bodies; audit events hold ids only; all SQL is parameterized.
+- **ABDM mock:** separate from the guardian's own consent. See `docs/abdm-integration.md` for the flow, scenarios and limits.
 
-- **Layers:** routes (HTTP) -> services (business rules) -> repositories (storage). The repository has Postgres and in-memory implementations behind the same interface.
-- **Child ID** is generated by the server (UUID). Clients cannot send one (400). A duplicate id is rejected with 409, enforced by the primary key in Postgres.
-- **Validation:** all mandatory fields are required; dates must be real `YYYY-MM-DD` calendar dates; date of birth cannot be in the future; state must be an Indian state or union territory; unknown fields are rejected.
-- **Consent rule:** a reminder cannot be created for a child whose `consentStatus` is `revoked` (403 `CONSENT_REVOKED`).
-- **Reminder status** is optional and defaults to `scheduled`. Allowed: `scheduled`, `sent`, `completed`, `cancelled`.
-- **Privacy in logs:** the access log records method, path, status and timing only. It never logs request bodies.
-- **SQL safety:** all queries are parameterized.
+## Technical challenge: adding authentication without breaking the original tests
+The first version had 17 passing tests and no login. Adding "a parent can only see their own child"
+meant every endpoint now required a token, which would make all 17 tests fail, because they called the
+API anonymously. Rewriting 17 working tests risked hiding real regressions.
 
-## Roadmap
+What I did: kept every test scenario unchanged and changed only how requests are sent. A small helper
+(`backend/tests/helpers/auth.js`) wraps supertest so each request carries a valid token for a synthetic
+guardian, and it passes a fixed test config so the tests never depend on a developer's `.env`. Then I
+added separate tests for the new rules (401 without a token, 404 for another guardian's child, rate
+limits, CORS). One related detail: returning **403** for someone else's child would confirm the child
+exists, so it returns the same **404** as a missing child.
 
-- [x] Project skeleton, `GET /health`, error handling
-- [x] `POST /children`, `GET /children/:id`, `POST /reminders` with validation
-- [x] Automated tests, Docker Compose
-- [ ] Authentication and per-guardian access control (a parent cannot read another child's record)
-- [ ] Audit log
-- [ ] ABDM M1 (ABHA), M2 (HIP) and M3 (HIU) using a mocked gateway
-- [ ] React frontend
-- [ ] Docs: ABDM integration design, AWS deployment plan, security considerations
-- [ ] Screenshots of test runs
+A second real problem came later. A test for the audit trail failed because successful
+health-information fetches were stored without a child id, so they did not appear in the child's audit
+list. The cause was that the route only knew the consent id; the fix was to look up the child from the consent.
 
-## Technical challenge
+## Limits and honesty
+- The ABDM part is a **mock**. It is not connected to any ABDM system, and the FHIR bundle is not validated against ABDM profiles.
+- Authentication is a mock too; real accounts, MFA and token revocation would be needed.
+- Nothing was deployed to AWS and no AWS cost was incurred; see `docs/aws-deployment.md`.
+- No automated tests exist for the frontend.
 
-_To be written from a real problem hit during development._
+## Evidence (to be added by the author)
+Screenshots are not committed yet. Capture them from your own runs and save them in `docs/screenshots/`:
+1. `npm test` output showing all tests passing (`backend/`).
+2. The `curl` session above: login, register, get, reminder, and the invalid request.
+3. The dashboard in MOCK mode: a granted consent with the FHIR bundle, then the refusal after revoking.
