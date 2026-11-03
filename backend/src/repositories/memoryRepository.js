@@ -21,6 +21,13 @@ class MemoryRepository {
     return child ? { ...child } : null;
   }
 
+  async listChildrenByGuardian(guardianId) {
+    return [...this.children.values()]
+      .filter((c) => c.guardianId === guardianId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((c) => ({ ...c }));
+  }
+
   async insertReminder(reminder) {
     if (!this.children.has(reminder.childId)) {
       throw new NotFoundError('CHILD_NOT_FOUND', `Child with id '${reminder.childId}' does not exist`);

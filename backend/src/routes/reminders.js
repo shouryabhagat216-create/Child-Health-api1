@@ -11,7 +11,7 @@ function remindersRouter({ reminderService }) {
     '/',
     validate('body', createReminderSchema),
     asyncHandler(async (req, res) => {
-      const reminder = await reminderService.create(req.body);
+      const reminder = await reminderService.create(req.body, req.guardian.id);
       res.status(201).json(reminder);
     })
   );

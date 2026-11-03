@@ -1,19 +1,23 @@
-const { NotFoundError } = require('../errors');
+const { findOwnedChild } = require('./ownership');
+
+// The owner id is internal; API responses do not include it.
+const toPublic = ({ guardianId, ...child }) => child;
 
 // Business logic lives here, separate from HTTP (routes) and storage (repositories).
 function createChildService({ repo, generateId }) {
   return {
-    async register(input) {
-      const child = { id: generateId(), ...input, createdAt: new Date().toISOString() };
-      return repo.insertChild(child); // throws ConflictError (409) if the id already exists
+    // guardianId comes from the verified token, never from the request body.
+    async register(input, guardianId) {
+      const child = { id: generateId(), ...input, guardianId, createdAt: new Date().toISOString() };
+      return toPublic(await repo.insertChild(child)); // throws ConflictError (409) if the id already exists
     },
 
-    async getById(id) {
-      const child = await repo.findChildById(id);
-      if (!child) {
-        throw new NotFoundError('CHILD_NOT_FOUND', `Child with id '${id}' does not exist`);
-      }
-      return child;
+    async getById(id, guardianId) {
+      return toPublic(await findOwnedChild(repo, id, guardianId));
+    },
+
+    async listForGuardian(guardianId) {
+      return (await repo.listChildrenByGuardian(guardianId)).map(toPublic);
     },
   };
 }

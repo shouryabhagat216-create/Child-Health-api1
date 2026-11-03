@@ -3,7 +3,7 @@ const { createApp } = require('./app');
 const { createRepository } = require('./repositories');
 
 const repo = createRepository(config);
-const app = createApp({ repo });
+const app = createApp({ repo, config });
 
 const server = app.listen(config.port, () => {
   console.log(`Child Health API listening on port ${config.port} (db mode: ${config.dbMode})`);

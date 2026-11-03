@@ -1,13 +1,13 @@
 const { randomUUID } = require('crypto');
-const { NotFoundError, ForbiddenError, ValidationError } = require('../errors');
+const { ForbiddenError, ValidationError } = require('../errors');
+const { findOwnedChild } = require('./ownership');
 
 function createReminderService({ repo }) {
   return {
-    async create(input) {
-      const child = await repo.findChildById(input.childId);
-      if (!child) {
-        throw new NotFoundError('CHILD_NOT_FOUND', `Child with id '${input.childId}' does not exist`);
-      }
+    async create(input, guardianId) {
+      // 404 if the child does not exist OR belongs to another guardian.
+      const child = await findOwnedChild(repo, input.childId, guardianId);
+      // NOTE: consentStatus 'pending' is deliberately still allowed (only 'revoked' blocks). Revisit for production.
       // Data-minimisation / consent rule: no new processing once the guardian has revoked consent.
       if (child.consentStatus === 'revoked') {
         throw new ForbiddenError(

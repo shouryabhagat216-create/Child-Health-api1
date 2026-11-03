@@ -1,4 +1,5 @@
-const request = require('supertest');
+// Requests are sent as a logged-in synthetic guardian (see tests/helpers/auth.js).
+const { authedRequest: request, TEST_CONFIG } = require('./helpers/auth');
 const { createApp } = require('../src/app');
 const { MemoryRepository } = require('../src/repositories/memoryRepository');
 
@@ -12,7 +13,7 @@ const validChild = {
 };
 
 const makeApp = (options = {}) =>
-  createApp({ repo: new MemoryRepository(), logRequests: false, ...options });
+  createApp({ repo: new MemoryRepository(), logRequests: false, config: TEST_CONFIG, ...options });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UNKNOWN_ID = '22222222-2222-4222-8222-222222222222';

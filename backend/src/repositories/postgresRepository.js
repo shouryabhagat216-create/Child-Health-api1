@@ -10,6 +10,7 @@ const toChild = (row) => ({
   guardianName: row.guardian_name,
   state: row.state,
   consentStatus: row.consent_status,
+  guardianId: row.guardian_id, // null for rows created before migration 002
   createdAt: row.created_at.toISOString(),
 });
 
@@ -31,10 +32,10 @@ class PostgresRepository {
   async insertChild(child) {
     try {
       const { rows } = await this.pool.query(
-        `INSERT INTO children (id, name, date_of_birth, guardian_name, state, consent_status, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO children (id, name, date_of_birth, guardian_name, state, consent_status, guardian_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [child.id, child.name, child.dateOfBirth, child.guardianName, child.state, child.consentStatus, child.createdAt]
+        [child.id, child.name, child.dateOfBirth, child.guardianName, child.state, child.consentStatus, child.guardianId, child.createdAt]
       );
       return toChild(rows[0]);
     } catch (err) {
@@ -48,6 +49,14 @@ class PostgresRepository {
   async findChildById(id) {
     const { rows } = await this.pool.query('SELECT * FROM children WHERE id = $1', [id]);
     return rows[0] ? toChild(rows[0]) : null;
+  }
+
+  async listChildrenByGuardian(guardianId) {
+    const { rows } = await this.pool.query(
+      'SELECT * FROM children WHERE guardian_id = $1 ORDER BY created_at, id',
+      [guardianId]
+    );
+    return rows.map(toChild);
   }
 
   async insertReminder(reminder) {
