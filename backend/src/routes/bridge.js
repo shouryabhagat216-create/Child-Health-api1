@@ -1,6 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const asyncHandler = require('../middleware/asyncHandler');
+const { createMemoryStore } = require('../state/stateStore');
 
 // Inbound callbacks from ABDM (the bridge). Mounted at the root: the registered bridge URL is the base and each
 // path is relative to it. Every route passes the callback guard first. A callback is acted on only when its
@@ -9,26 +10,25 @@ const answer = z.object({ response: z.object({ requestId: z.string().min(1) }).p
 
 // Callbacks that ABDM starts (nothing of ours is being answered) carry a REQUEST-ID of their own. A request id seen
 // before is a repeat delivery and is dropped, so we answer each one once.
-function createSeen({ now = () => Date.now(), ttlMs = 60 * 60 * 1000 } = {}) {
-  const map = new Map();
-  return (id) => {
-    for (const [key, at] of map) if (at <= now()) map.delete(key);
-    if (!id || map.has(id)) return true;
-    map.set(id, now() + ttlMs);
-    return false;
+// Kept in the shared store so a repeat delivery to another container is dropped too. The first writer wins
+// (one atomic insert).
+function createSeen({ store = createMemoryStore(), ttlMs = 60 * 60 * 1000 } = {}) {
+  return async (id) => {
+    if (!id) return true;
+    return !(await store.putNew('callback-seen', id, { seen: true }, { ttlMs }));
   };
 }
 
-function bridgeRouter({ guard, pending, hipLinking, hipData, hiu, hipClient, defer, log = (line) => console.warn(line) }) {
+function bridgeRouter({ guard, pending, hipLinking, hipData, hiu, hipClient, defer, store, log = (line) => console.warn(line) }) {
   const router = express.Router();
-  const seen = createSeen();
+  const seen = createSeen({ store });
 
   // Answers ABDM's own requests: acknowledge at once with 202, then do the work and reply by call. Failures in the
   // deferred work are logged by name only.
   const asked = (handle) =>
     asyncHandler(async (req, res) => {
       const requestId = req.get('REQUEST-ID');
-      if (seen(requestId)) {
+      if (await seen(requestId)) {
         log(JSON.stringify({ level: 'warn', event: 'callback_dropped', reason: 'repeat or missing request id', path: req.path, requestId: requestId || null }));
         return res.status(202).end();
       }
@@ -46,12 +46,12 @@ function bridgeRouter({ guard, pending, hipLinking, hipData, hiu, hipClient, def
   const answers = (kind, handle) =>
     asyncHandler(async (req, res) => {
       const parsed = answer.safeParse(req.body);
-      const entry = parsed.success ? pending.take(parsed.data.response.requestId) : null;
+      const entry = parsed.success ? await pending.take(parsed.data.response.requestId) : null;
       if (!entry || entry.kind !== kind) {
         log(JSON.stringify({ level: 'warn', event: 'callback_dropped', reason: 'not an answer to a call we sent', path: req.path, requestId: req.get('REQUEST-ID') || null }));
         return res.status(202).end();
       }
-      handle(entry, req.body);
+      await handle(entry, req.body);
       return res.status(202).end();
     });
 
@@ -88,7 +88,7 @@ function bridgeRouter({ guard, pending, hipLinking, hipData, hiu, hipClient, def
 
   // ---- consent and data flow ----
   router.post('/api/v3/consent/request/hip/notify', guard, asked(async ({ body, requestId, facilityId }) => {
-    const ack = hipData.onConsentNotify(facilityId, body);
+    const ack = await hipData.onConsentNotify(facilityId, body);
     if (!ack) {
       log(JSON.stringify({ level: 'warn', event: 'callback_dropped', reason: 'consent notification not acted on', path: '/api/v3/consent/request/hip/notify', requestId }));
       return;
@@ -114,7 +114,7 @@ function bridgeRouter({ guard, pending, hipLinking, hipData, hiu, hipClient, def
 
   // ---- M3: the patient's decision (ABDM starts this one) ----
   router.post('/api/v3/hiu/consent/request/notify', guard, asked(async ({ body, requestId, facilityId }) => {
-    const ack = hiu.onConsentNotify(body);
+    const ack = await hiu.onConsentNotify(body);
     if (!ack) {
       log(JSON.stringify({ level: 'warn', event: 'callback_dropped', reason: 'consent notification not acted on', path: '/api/v3/hiu/consent/request/notify', requestId }));
       return;
@@ -125,15 +125,15 @@ function bridgeRouter({ guard, pending, hipLinking, hipData, hiu, hipClient, def
   // ---- M3: the HIP pushes the encrypted records here. The address is a one-time capability URL we built for one
   // transfer; the HIP also sends the gateway bearer token. Records are large, so this route has its own body limit
   // (the app skips its general 100kb parser for this path).
-  router.post('/api/v3/hiu/data-push/:token', express.json({ limit: '10mb' }), (req, res) => {
+  router.post('/api/v3/hiu/data-push/:token', express.json({ limit: '10mb' }), asyncHandler(async (req, res) => {
     if (!/^Bearer\s+\S+/.test(req.get('Authorization') || '')) {
       log(JSON.stringify({ level: 'warn', event: 'callback_rejected', reason: 'missing bearer token', path: '/api/v3/hiu/data-push/:token' }));
       return res.status(401).json({ error: { code: 'CALLBACK_REJECTED', message: 'Callback rejected' } });
     }
-    const out = hiu.receivePush(req.params.token, req.body || {});
+    const out = await hiu.receivePush(req.params.token, req.body || {});
     if (out.status !== 202) log(JSON.stringify({ level: 'warn', event: 'data_push_refused', status: out.status }));
     return res.status(out.status).end();
-  });
+  }));
 
   return router;
 }

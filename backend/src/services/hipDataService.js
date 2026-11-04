@@ -1,6 +1,7 @@
 const { createHash, randomUUID } = require('crypto');
 const { createSender } = require('../abdm/fidelius');
 const { toImmunizationBundle } = require('../fhir/mapper');
+const { createMemoryStore } = require('../state/stateStore');
 
 const KNOWN_STATUSES = ['GRANTED', 'REVOKED', 'EXPIRED', 'DENIED'];
 const CARE_CONTEXT_REFERENCE = 'immunization-record';
@@ -8,24 +9,25 @@ const day = (iso) => String(iso).slice(0, 10);
 
 // M2 as a HIP, consent and data flow: remember the consent decisions ABDM tells us about, and when a requester
 // asks for records under a granted consent, encrypt a FHIR bundle for them and push it to their data push URL.
-// Consents are held in memory (lost on restart; persist before production). The consent artefact's signature is
+// Consents are kept in the shared state store (encrypted in the database). The consent artefact's signature is
 // NOT verified here: the key for that is not published (confirm at onboarding). The FHIR is core R4 and has NOT
 // been validated against the NRCeS profiles. The encryption is not yet proven against a real Fidelius peer.
-function createHipDataService({ repo, hipClient, safePushUrl, now = () => new Date(), log = (line) => console.warn(line) }) {
-  const consents = new Map(); // consentId -> { status, hiTypes, from, to, eraseAt, childIds }
+function createHipDataService({ repo, hipClient, safePushUrl, store = createMemoryStore(), now = () => new Date(), log = (line) => console.warn(line) }) {
+  const NS = 'hip-consent'; // consentId -> { status, hiTypes, from, to, eraseAt, childIds }
+  const getConsent = (id) => store.get(NS, id);
 
   const effective = (c) => (c.status === 'GRANTED' && c.eraseAt && new Date(c.eraseAt) <= now() ? 'EXPIRED' : c.status);
 
   return {
     // Returns the acknowledgement body to send, or null when the notification is not one we act on.
-    onConsentNotify(hipId, body) {
+    async onConsentNotify(hipId, body) {
       const n = body && body.notification;
       if (!n || !n.consentId || !KNOWN_STATUSES.includes(n.status)) return null; // refuse an unknown status instead of defaulting
       const detail = n.consentDetail || {};
       if (detail.hip && detail.hip.id && detail.hip.id !== hipId) return null;
       const range = (detail.permission && detail.permission.dateRange) || {};
-      const previous = consents.get(n.consentId);
-      consents.set(n.consentId, {
+      const previous = await getConsent(n.consentId);
+      await store.put(NS, n.consentId, {
         status: n.status,
         hiTypes: detail.hiTypes || (previous && previous.hiTypes) || [],
         from: range.from || (previous && previous.from),
@@ -42,7 +44,7 @@ function createHipDataService({ repo, hipClient, safePushUrl, now = () => new Da
     // push() sends the records; call it AFTER the acknowledgement has been sent.
     async onHealthInformationRequest(hipId, body, requestId) {
       const hi = body && body.hiRequest;
-      const consent = hi && hi.consent && consents.get(hi.consent.id);
+      const consent = hi && hi.consent && (await getConsent(hi.consent.id));
       if (!consent || effective(consent) !== 'GRANTED') {
         return { ok: false, error: { code: 'ABDM-1062', message: 'Consent is not granted' } };
       }
@@ -106,7 +108,10 @@ function createHipDataService({ repo, hipClient, safePushUrl, now = () => new Da
       return { ok: true, push, transactionId: transactionId || randomUUID() };
     },
 
-    consentStatus: (consentId) => (consents.has(consentId) ? effective(consents.get(consentId)) : null),
+    consentStatus: async (consentId) => {
+      const c = await getConsent(consentId);
+      return c ? effective(c) : null;
+    },
   };
 }
 

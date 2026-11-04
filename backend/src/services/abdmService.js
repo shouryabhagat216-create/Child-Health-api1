@@ -3,6 +3,7 @@ const { AppError, NotFoundError, ForbiddenError, ValidationError } = require('..
 const { findOwnedChild } = require('./ownership');
 const { MOCK_OTP, CONSENT_STATUS: S } = require('../abdm/constants');
 const { toImmunizationBundle } = require('../fhir/mapper');
+const { createMemoryStore } = require('../state/stateStore');
 const { syntheticAbhaFor, maskAbha, syntheticAbhaAddress } = require('../abdm/syntheticAbha');
 
 const MAX_OTP_ATTEMPTS = 3;
@@ -14,10 +15,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // MOCK ABDM logic: ABHA verification, care-context linking and the consent lifecycle.
 // Every operation first proves the child belongs to the logged-in guardian (findOwnedChild),
 // then runs through the mock gateway, which can simulate failures (see mockGateway.js).
-function createAbdmService({ repo, gateway, config, now = () => new Date() }) {
-  // Pending link transactions live in memory. They are short-lived (10 minutes) and are lost on a
-  // restart; a real system would keep them in a shared store such as Redis or a database table.
-  const linkTransactions = new Map();
+function createAbdmService({ repo, gateway, config, store = createMemoryStore(), now = () => new Date() }) {
+  // Pending link transactions are short-lived (10 minutes) and live in the shared state store.
+  const NS = 'mock-link-txn';
 
   // The stored status can say GRANTED although the consent has since expired, so the status shown
   // to callers is always worked out from the expiry time at the moment of the request.
@@ -95,7 +95,7 @@ function createAbdmService({ repo, gateway, config, now = () => new Date() }) {
         }
         const transactionId = randomUUID();
         const expiresAt = new Date(now().getTime() + LINK_TRANSACTION_TTL_MS);
-        linkTransactions.set(transactionId, { childId, guardianId, attempts: 0, expiresAt });
+        await store.put(NS, transactionId, { childId, guardianId, attempts: 0, expiresAt: expiresAt.getTime() }, { ttlMs: LINK_TRANSACTION_TTL_MS });
         // Mirrors the documented init reply: auth type DIRECT, medium, hint and expiry.
         return { transactionId, authType: 'DIRECT', medium: 'MOBILE_OTP', hint: 'mock mobile', expiresAt: expiresAt.toISOString() };
       });
@@ -104,23 +104,24 @@ function createAbdmService({ repo, gateway, config, now = () => new Date() }) {
     async linkConfirm(childId, guardianId, { transactionId, otp }, scenario) {
       await findOwnedChild(repo, childId, guardianId);
       return gateway.execute(scenario, 'careContext.linkConfirm', async () => {
-        const txn = linkTransactions.get(transactionId);
-        if (!txn || txn.childId !== childId || txn.guardianId !== guardianId || txn.expiresAt <= now()) {
-          linkTransactions.delete(transactionId);
+        const txn = await store.get(NS, transactionId);
+        if (!txn || txn.childId !== childId || txn.guardianId !== guardianId || txn.expiresAt <= now().getTime()) {
+          await store.del(NS, transactionId);
           throw new NotFoundError('TRANSACTION_NOT_FOUND', 'Unknown or expired link transaction; start again');
         }
         if (otp !== MOCK_OTP) {
           txn.attempts += 1;
           // Bounded attempts: after 3 wrong codes the transaction is dead.
           if (txn.attempts >= MAX_OTP_ATTEMPTS) {
-            linkTransactions.delete(transactionId);
+            await store.del(NS, transactionId);
             throw new AppError(400, 'TOO_MANY_OTP_ATTEMPTS', 'Too many wrong OTPs; start linking again');
           }
+          await store.put(NS, transactionId, txn, { ttlMs: Math.max(1000, txn.expiresAt - now().getTime()) });
           throw new ValidationError('The OTP is incorrect', [
             { field: 'otp', message: `is incorrect (${MAX_OTP_ATTEMPTS - txn.attempts} attempts left)` },
           ]);
         }
-        linkTransactions.delete(transactionId);
+        await store.del(NS, transactionId);
         const careContext = await repo.insertCareContext({
           id: randomUUID(),
           childId,

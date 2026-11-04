@@ -118,10 +118,24 @@ function createSender(requester) {
 }
 
 // The receiving side (used by M3, and by the tests): decrypt with our private key and the sender's material.
-function createReceiver() {
-  const ours = generateKeyPair();
-  const ourNonce = crypto.randomBytes(32);
+function restoreKeyPair(saved) {
   return {
+    privateKey: crypto.createPrivateKey({ key: Buffer.from(saved.privateKey, 'base64'), format: 'der', type: 'pkcs8' }),
+    publicKeySpki: Buffer.from(saved.publicKeySpki, 'base64'),
+  };
+}
+
+// `saved` (from receiver.serialize()) restores a receiver from the shared state store after a restart or on another
+// container. It holds the private key, so it must only ever go into the encrypted store.
+function createReceiver(saved) {
+  const ours = saved ? restoreKeyPair(saved) : generateKeyPair();
+  const ourNonce = saved ? Buffer.from(saved.nonce, 'base64') : crypto.randomBytes(32);
+  return {
+    serialize: () => ({
+      privateKey: ours.privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64'),
+      publicKeySpki: ours.publicKeySpki.toString('base64'),
+      nonce: ourNonce.toString('base64'),
+    }),
     keyMaterial: {
       cryptoAlg: 'ECDH',
       curve: 'Curve25519',

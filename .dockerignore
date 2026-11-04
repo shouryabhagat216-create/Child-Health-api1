@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/tests
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.claude
+docs
+backend/config/facilities.json
+**/*.log
+.DS_Store

@@ -36,16 +36,24 @@ const { safePushUrl } = require('./abdm/safePushUrl');
 const { hipRouter } = require('./routes/hip');
 const { createHiuService } = require('./services/hiuService');
 const { hiuRouter } = require('./routes/hiu');
+const { createStateStore } = require('./state/stateStore');
 
 // App factory: dependencies are injected so tests can use an in-memory repository
 // and a fixed id generator (needed to test the duplicate-id check).
 // `config` can be overridden in tests (e.g. a tiny rate limit).
-function createApp({ repo, generateId = randomUUID, logRequests = true, config = defaults, sandboxClient, abhaProvider: injectedAbhaProvider, bridge: injectedBridge = {} }) {
+function createApp({ repo, store: injectedStore, generateId = randomUUID, logRequests = true, config = defaults, sandboxClient, abhaProvider: injectedAbhaProvider, bridge: injectedBridge = {} }) {
   const app = express();
+  // Shared state (ABDM transactions, callbacks, consents, records): memory in tests, encrypted Postgres otherwise.
+  const store = injectedStore || createStateStore({ config, repo });
 
   if (config.trustProxy) app.set('trust proxy', config.trustProxy);
   app.use(requestId);
-  app.use(helmet());
+  // When the dashboard is served from here, the ABHA card is shown from a blob: URL, so images may come from blob:.
+  app.use(
+    config.serveFrontend
+      ? helmet({ contentSecurityPolicy: { directives: { ...helmet.contentSecurityPolicy.getDefaultDirectives(), 'img-src': ["'self'", 'data:', 'blob:'] } } })
+      : helmet()
+  );
   // Browsers may only call the API from the configured frontend origin.
   // Requests without an Origin header (curl, server-to-server) are still served; CORS only restricts browsers.
   app.use(cors({ origin: (origin, cb) => cb(null, origin === config.corsOrigin) }));
@@ -71,6 +79,7 @@ function createApp({ repo, generateId = randomUUID, logRequests = true, config =
     repo,
     gateway: createMockGateway(config.abdm),
     config,
+    store,
   });
 
   const auditService = createAuditService({ repo });
@@ -87,23 +96,25 @@ function createApp({ repo, generateId = randomUUID, logRequests = true, config =
       config: { ...config.abdm, abhaBaseUrl: config.abdm.abhaBaseUrl || 'https://abhasbx.abdm.gov.in', mode: sandbox ? 'sandbox' : 'mock' },
       sandboxClient: sandbox,
     });
-  const abhaService = createAbhaService({ repo, provider: abhaProvider });
+  const abhaService = createAbhaService({ repo, provider: abhaProvider, store });
 
   // M2 as a HIP and the bridge that receives ABDM's callbacks. The facility list is re-read per call so a
   // changed file applies without a restart; a missing file means no facilities and every callback is refused.
   const facilities = injectedBridge.facilities || (() => loadFacilities(config.abdm.facilitiesFile));
-  const pending = injectedBridge.pending || createPendingRequests();
+  const pending = injectedBridge.pending || createPendingRequests({ store });
   const hipClient = injectedBridge.hipClient || (sandbox && config.abdm.mode === 'sandbox' ? createHipClient({ config: config.abdm, sandboxClient: sandbox }) : null);
-  const hipLinking = createHipLinkingService({ repo, hipClient, pending, facilities });
+  const hipLinking = createHipLinkingService({ repo, hipClient, pending, facilities, store });
   const defer = injectedBridge.defer || ((fn) => { setImmediate(fn); });
-  const hiu = createHiuService({ repo, hipClient, pending, facilities, publicBaseUrl: () => injectedBridge.publicBaseUrl || config.abdm.publicBaseUrl || '', defer });
-  const hipData = createHipDataService({ repo, hipClient, safePushUrl: injectedBridge.safePushUrl || safePushUrl });
+  const hiu = createHiuService({ repo, hipClient, pending, facilities, store, publicBaseUrl: () => injectedBridge.publicBaseUrl || config.abdm.publicBaseUrl || '', defer });
+  const hipData = createHipDataService({ repo, hipClient, store, safePushUrl: injectedBridge.safePushUrl || safePushUrl });
   const callbackGuard = createCallbackGuard({ facilityIds: () => idsOf(facilities()) });
 
   app.use('/health', healthRouter({ repo }));
   // The mock login hands out tokens to synthetic users, so it must never exist in production.
   // With it off, production has no way to log in until a real identity provider is added.
-  if (config.nodeEnv !== 'production') {
+  // A staging/demo deployment may turn it on with ALLOW_MOCK_LOGIN=1, but only behind a network restriction
+  // (the load balancer lets only listed addresses reach it; see infra/).
+  if (config.nodeEnv !== 'production' || config.allowMockLogin) {
     app.use('/auth', authRouter({ tokens, loginLimiter }));
   }
   app.use('/children', generalLimiter, requireAuth, childrenRouter({ childService }));
@@ -121,10 +132,14 @@ function createApp({ repo, generateId = randomUUID, logRequests = true, config =
   // M2 as a HIP (REAL sandbox): guardian-facing calls, and the bridge ABDM calls back.
   app.use('/hip', generalLimiter, requireAuth, hipRouter({ hipLinking, auditService }));
   app.use('/hiu', generalLimiter, requireAuth, hiuRouter({ hiu, auditService }));
-  app.use(bridgeRouter({ guard: callbackGuard, pending, hipLinking, hipData, hiu, hipClient, defer }));
+  app.use(bridgeRouter({ guard: callbackGuard, pending, hipLinking, hipData, hiu, hipClient, defer, store }));
+
+  // The built dashboard, for a one-address demo. API routes above take precedence.
+  if (config.serveFrontend) app.use(express.static(config.frontendDist));
 
   app.use(notFoundHandler);
   app.use(errorHandler);
+  app.locals.store = store;
   return app;
 }
 

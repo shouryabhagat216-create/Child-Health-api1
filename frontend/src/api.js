@@ -1,7 +1,8 @@
 // Small fetch wrapper. The login token is kept only in memory (a module variable), not in
 // localStorage, so it cannot be read back by other scripts or survive a page reload.
 // Trade-off: reloading the page logs you out. That is acceptable for a mock dashboard.
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// An empty VITE_API_URL means the API is on the same address as the page (the one-address demo).
+const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 let token = null;
 let listener = () => {};

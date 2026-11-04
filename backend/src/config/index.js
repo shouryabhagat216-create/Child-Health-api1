@@ -11,7 +11,17 @@ if (nodeEnv === 'production' && jwtSecret === DEV_JWT_SECRET) {
   throw new Error('JWT_SECRET must be set in production');
 }
 
+// Key that encrypts the shared state table (32 bytes, base64). Dev-only fallback, refused in production.
+const DEV_STATE_KEY = Buffer.alloc(32, 7).toString('base64');
+const stateEncryptionKey = process.env.STATE_ENCRYPTION_KEY || DEV_STATE_KEY;
+if (nodeEnv === 'production' && stateEncryptionKey === DEV_STATE_KEY) {
+  throw new Error('STATE_ENCRYPTION_KEY must be set in production');
+}
+
 module.exports = {
+  stateEncryptionKey,
+  // Staging/demo only: keep the mock login in a production build. Never set this where real users log in.
+  allowMockLogin: process.env.ALLOW_MOCK_LOGIN === '1',
   port: Number(process.env.PORT) || 3000,
   nodeEnv,
   dbMode: process.env.DB_MODE || 'postgres',
@@ -23,6 +33,9 @@ module.exports = {
   trustProxy: process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) : false,
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1h',
+  // Serve the built dashboard from this server (one address for a demo). Off unless SERVE_FRONTEND=1.
+  serveFrontend: process.env.SERVE_FRONTEND === '1',
+  frontendDist: process.env.FRONTEND_DIST || path.join(__dirname, '../../../frontend/dist'),
   // Only this origin (the React dev server by default) may call the API from a browser.
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   // Mock ABDM gateway behaviour (see src/abdm/mockGateway.js) plus the optional REAL sandbox client.

@@ -111,6 +111,16 @@ describe('mock login in production', () => {
   });
 });
 
+describe('mock login in a staging build', () => {
+  test('ALLOW_MOCK_LOGIN keeps the mock login in production mode', async () => {
+    const app = makeApp({ ...TEST_CONFIG, nodeEnv: 'production', allowMockLogin: true });
+    await anonymousRequest(app)
+      .post('/auth/mock-login')
+      .send({ username: NEHA.username, password: NEHA.password })
+      .expect(200);
+  });
+});
+
 describe('rate limiting and CORS', () => {
   test('login is rate limited and returns the standard error shape (429)', async () => {
     const app = makeApp({ ...TEST_CONFIG, rateLimit: { windowMs: 60000, max: 1000, loginMax: 3 } });
