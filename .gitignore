@@ -10,3 +10,11 @@ build/
 .vscode/
 .idea/
 backend/config/facilities.json
+
+# Terraform (state holds generated secrets)
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+*.tfplan
+crash.log

@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+region          = "ap-southeast-2" # CONFIRM in AWS Settings > View all projects > Overview > Additional info > Region
+domain_name     = "demo.example.org"
+route53_zone_id = "Z0000000000000"
+allowed_cidrs   = ["203.0.113.7/32"] # your own address(es); never 0.0.0.0/0
+desired_count   = 0                  # 0 for the first apply, then 1 after the image is pushed
