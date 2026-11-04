@@ -1,28 +1,17 @@
-resource "aws_acm_certificate" "main" {
-  domain_name       = var.domain_name
-  validation_method = "DNS"
-  lifecycle { create_before_destroy = true }
+# Public HTTPS comes from CloudFront's own address (*.cloudfront.net), so there is no domain, ACM certificate or
+# Route 53 here. CloudFront talks to the load balancer over HTTP, so the load balancer is locked to CloudFront:
+#   1. its security group admits only CloudFront's origin-facing address list, and
+#   2. its listener forwards only requests carrying a secret header that CloudFront adds (anything else gets 403).
+# The header is a shared secret held in the Terraform state; it stops someone who reaches the load balancer's own
+# address from skipping CloudFront (and with it the address allow-list below).
+
+resource "random_password" "origin_verify" {
+  length  = 40
+  special = false
 }
 
-resource "aws_route53_record" "validation" {
-  for_each = {
-    for o in aws_acm_certificate.main.domain_validation_options : o.domain_name => {
-      name   = o.resource_record_name
-      record = o.resource_record_value
-      type   = o.resource_record_type
-    }
-  }
-  zone_id         = var.route53_zone_id
-  name            = each.value.name
-  type            = each.value.type
-  records         = [each.value.record]
-  ttl             = 60
-  allow_overwrite = true
-}
-
-resource "aws_acm_certificate_validation" "main" {
-  certificate_arn         = aws_acm_certificate.main.arn
-  validation_record_fqdns = [for r in aws_route53_record.validation : r.fqdn]
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
 }
 
 resource "aws_lb" "main" {
@@ -54,26 +43,6 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
-  default_action {
-    type = "redirect"
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
-    }
-  }
-}
-
-# Default: refuse. Only two kinds of request are forwarded:
-#   1. /api/v3/*  - ABDM callbacks and the records push. These must be reachable from ABDM; the app itself checks
-#                   the bearer token, the facility header and that the request answers a call we sent.
-#   2. anything from an address in allowed_cidrs - the dashboard, the mock login and the guardian API.
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = aws_acm_certificate_validation.main.certificate_arn
 
   default_action {
     type = "fixed-response"
@@ -85,37 +54,82 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-resource "aws_lb_listener_rule" "abdm_callbacks" {
-  listener_arn = aws_lb_listener.https.arn
+resource "aws_lb_listener_rule" "from_cloudfront" {
+  listener_arn = aws_lb_listener.http.arn
   priority     = 10
+
   action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api.arn
   }
   condition {
-    path_pattern { values = ["/api/v3/*"] }
+    http_header {
+      http_header_name = "X-Origin-Verify"
+      values           = [random_password.origin_verify.result]
+    }
   }
 }
 
-resource "aws_lb_listener_rule" "allowed_addresses" {
-  listener_arn = aws_lb_listener.https.arn
-  priority     = 20
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
-  }
-  condition {
-    source_ip { values = var.allowed_cidrs }
-  }
+# ---- CloudFront ----
+# Who may open what is decided here, because there is no WAF:
+#   /api/v3/*  (ABDM callbacks and the records push) - anyone; the app checks the bearer token, the facility header
+#              and that the callback answers a call we sent.
+#   everything else (dashboard, mock login, guardian API) - only viewers whose address is in allowed_cidrs.
+data "aws_cloudfront_cache_policy" "disabled" {
+  name = "Managed-CachingDisabled"
 }
 
-resource "aws_route53_record" "app" {
-  zone_id = var.route53_zone_id
-  name    = var.domain_name
-  type    = "A"
-  alias {
-    name                   = aws_lb.main.dns_name
-    zone_id                = aws_lb.main.zone_id
-    evaluate_target_health = true
+data "aws_cloudfront_origin_request_policy" "all_viewer" {
+  name = "Managed-AllViewer"
+}
+
+resource "aws_cloudfront_function" "viewer_ip" {
+  name    = "${var.name}-viewer-ip"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = templatefile("${path.module}/viewer_ip_check.js.tftpl", { allowed = jsonencode(var.allowed_cidrs) })
+}
+
+resource "aws_cloudfront_distribution" "main" {
+  enabled         = true
+  is_ipv6_enabled = false # viewers arrive over IPv4, which is what the address check understands
+  comment         = var.name
+  price_class     = "PriceClass_100"
+
+  origin {
+    origin_id   = "alb"
+    domain_name = aws_lb.main.dns_name
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = random_password.origin_verify.result
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id         = "alb"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods           = ["GET", "HEAD"]
+    cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer.id # pass headers (Authorization) through
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.viewer_ip.arn
+    }
+  }
+
+  restrictions {
+    geo_restriction { restriction_type = "none" }
+  }
+  viewer_certificate {
+    cloudfront_default_certificate = true
   }
 }

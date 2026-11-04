@@ -4,9 +4,9 @@ variable "region" {
 }
 
 variable "aws_profile" {
-  description = "AWS CLI profile to use (sign in with: aws login --region <region> --profile demo)."
+  description = "AWS CLI profile for Terraform's own credentials, or null to use AWS_* environment variables. The aws login session is not read by the provider directly: export it first (see README)."
   type        = string
-  default     = "demo"
+  default     = null
 }
 
 variable "name" {
@@ -15,23 +15,13 @@ variable "name" {
   default     = "wombto18-demo"
 }
 
-variable "domain_name" {
-  description = "Public host name for the demo, for example demo.example.org. Must be inside the Route 53 hosted zone below."
-  type        = string
-}
-
-variable "route53_zone_id" {
-  description = "Id of the Route 53 hosted zone that holds domain_name (used for the ACM certificate validation and the alias record)."
-  type        = string
-}
-
 variable "allowed_cidrs" {
-  description = "Addresses (for example [\"203.0.113.7/32\"]) allowed to open the dashboard and the mock login. ABDM callbacks under /api/v3/ stay reachable from anywhere (they are checked by the app)."
+  description = "IPv4 addresses (for example [\"203.0.113.7/32\"]) allowed to open the dashboard and the mock login. ABDM callbacks under /api/v3/ stay reachable from anywhere (they are checked by the app)."
   type        = list(string)
 
   validation {
-    condition     = length(var.allowed_cidrs) > 0 && !contains(var.allowed_cidrs, "0.0.0.0/0")
-    error_message = "List at least one address and do not use 0.0.0.0/0: the mock login must not be open to the internet."
+    condition     = length(var.allowed_cidrs) > 0 && alltrue([for c in var.allowed_cidrs : can(regex("^[0-9]{1,3}(\\.[0-9]{1,3}){3}/(8|9|[12][0-9]|3[0-2])$", c))])
+    error_message = "List at least one IPv4 address as a CIDR with a prefix of /8 to /32 (use /32 for one address). 0.0.0.0/0 is refused: the mock login must not be open to the internet."
   }
 }
 

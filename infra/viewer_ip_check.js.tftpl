@@ -1,0 +1,25 @@
+// CloudFront viewer-request function. Generated from variable allowed_cidrs.
+var ALLOWED = ${allowed};
+
+function toInt(ip) {
+  var p = ip.split('.');
+  return ((+p[0] << 24) >>> 0) + (+p[1] << 16) + (+p[2] << 8) + (+p[3]);
+}
+
+function inCidr(ip, cidr) {
+  var a = cidr.split('/');
+  var bits = a.length > 1 ? +a[1] : 32;
+  var mask = bits === 0 ? 0 : (0xFFFFFFFF << (32 - bits)) >>> 0;
+  return ((toInt(ip) & mask) >>> 0) === ((toInt(a[0]) & mask) >>> 0);
+}
+
+function handler(event) {
+  var request = event.request;
+  // ABDM must be able to reach its callbacks; the app checks them itself.
+  if (request.uri.indexOf('/api/v3/') === 0) return request;
+  var ip = event.viewer.ip;
+  for (var i = 0; i < ALLOWED.length; i++) {
+    if (inCidr(ip, ALLOWED[i])) return request;
+  }
+  return { statusCode: 403, statusDescription: 'Forbidden', headers: { 'content-type': { value: 'text/plain' } } };
+}

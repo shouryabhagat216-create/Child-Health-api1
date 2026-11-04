@@ -1,22 +1,27 @@
 # Staging/demo infrastructure (Terraform)
 
-ABDM **sandbox** only. One ECS Fargate task, an ALB with an ACM certificate, a single-AZ RDS PostgreSQL 16,
-Secrets Manager, CloudWatch Logs. No NAT gateway, no WAF. `terraform destroy` removes all of it.
+ABDM **sandbox** only. One ECS Fargate task, an ALB behind CloudFront, a single-AZ RDS PostgreSQL 16,
+Secrets Manager, CloudWatch Logs. HTTPS comes from CloudFront's free `*.cloudfront.net` address (no domain,
+no ACM, no Route 53). No NAT gateway, no WAF. `terraform destroy` removes all of it.
 
-**Nothing here has been applied.** Terraform is not installed on the author's machine yet, so these files have
-not even been through `terraform validate`. Read `terraform plan` before any apply.
+**Nothing here has been applied.** The files pass `terraform validate` (syntax and references only; no AWS call
+was made). Read `terraform plan` before any apply.
 
 ## Before you apply
 1. Confirm the Region: AWS Settings > View all projects > Overview > Additional info > Region.
 2. Set a spend limit (AWS Settings > Billing) and a budget alert (Billing and Cost Management > Budgets).
-3. You need a Route 53 hosted zone for the demo host name (ACM validation and the alias record use it).
+3. Find your public IPv4 address (for `allowed_cidrs`); it must be the address you browse from.
 
 ## Network rules
-- Only `/api/v3/*` (ABDM callbacks and the records push) is reachable from anywhere; the app checks the bearer
-  token, the facility header and that the callback answers a call we sent.
-- Everything else (dashboard, mock login, guardian API) is forwarded only for addresses in `allowed_cidrs`;
-  other visitors get 403 from the load balancer. `0.0.0.0/0` is rejected by a validation rule.
-- Task: port 3000 only from the ALB. Database: port 5432 only from the task, private subnets, no internet route.
+- CloudFront terminates HTTPS. A CloudFront Function lets `/api/v3/*` (ABDM callbacks and the records push)
+  through from anywhere (the app checks the bearer token, the facility header and that the callback answers a
+  call we sent) and everything else (dashboard, mock login, guardian API) only from `allowed_cidrs`; others get 403.
+  `0.0.0.0/0` is rejected by a validation rule.
+- CloudFront reaches the load balancer over plain HTTP. The load balancer's security group admits only
+  CloudFront's origin-facing address list, and its listener forwards only requests with a secret header that
+  CloudFront adds (default: 403). That traffic is not encrypted between CloudFront and the load balancer: acceptable
+  for synthetic sandbox data, not for real records.
+- Task: port 3000 only from the load balancer. Database: port 5432 only from the task, private subnets, no internet route.
 
 ## Steps
 ```bash
@@ -35,7 +40,7 @@ docker push <ecr_repository_url>:latest
 #   <name>/abdm-client-id and <name>/abdm-client-secret
 # then set desired_count = 1 in terraform.tfvars, plan, apply.
 # finally point ABDM at the new address:
-ABDM_PUBLIC_BASE_URL=https://<domain_name> node backend/scripts/bridge-url-v3.js --apply
+ABDM_PUBLIC_BASE_URL=<url output> node backend/scripts/bridge-url-v3.js --apply
 ```
 
 ## Known limits
@@ -43,6 +48,10 @@ ABDM_PUBLIC_BASE_URL=https://<domain_name> node backend/scripts/bridge-url-v3.js
   and private (it is git-ignored).
 - The container runs the migrations at start, which is fine for one task only.
 - Rate limiting is still per process; the variable `desired_count` refuses more than one task.
+- The CloudFront address is generated at creation and changes if the distribution is recreated; re-run the bridge
+  script then.
+- The CloudFront origin prefix list counts about 55 entries against the load balancer security group's rule quota;
+  if the plan fails on that, a quota increase is needed.
 - Facility ids (`backend/config/facilities.json`) are not in the image; M2/M3 stay blocked until a registered
   facility exists, and a way to supply that file (a secret mounted at start) is still to be added.
 - The Dockerfile has not been built (Docker is not installed here).

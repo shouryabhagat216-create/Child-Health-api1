@@ -1,5 +1,5 @@
 output "url" {
-  value = "https://${var.domain_name}"
+  value = "https://${aws_cloudfront_distribution.main.domain_name}"
 }
 
 output "ecr_repository_url" {
@@ -8,7 +8,7 @@ output "ecr_repository_url" {
 
 output "abdm_public_base_url" {
   description = "Value for ABDM_PUBLIC_BASE_URL when running backend/scripts/bridge-url-v3.js --apply"
-  value       = "https://${var.domain_name}"
+  value       = "https://${aws_cloudfront_distribution.main.domain_name}"
 }
 
 output "abdm_secret_names" {

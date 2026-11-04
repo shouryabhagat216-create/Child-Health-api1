@@ -76,7 +76,7 @@ resource "aws_ecs_task_definition" "api" {
 
   runtime_platform {
     operating_system_family = "LINUX"
-    cpu_architecture        = "X86_64"
+    cpu_architecture        = "ARM64"
   }
 
   container_definitions = jsonencode([{
@@ -93,11 +93,11 @@ resource "aws_ecs_task_definition" "api" {
       { name = "PORT", value = "3000" },
       { name = "DB_MODE", value = "postgres" },
       { name = "SERVE_FRONTEND", value = "1" },
-      { name = "TRUST_PROXY", value = "1" },
-      { name = "ALLOW_MOCK_LOGIN", value = "1" }, # safe only because the load balancer restricts who can reach it
+      { name = "TRUST_PROXY", value = "2" },      # CloudFront and the load balancer
+      { name = "ALLOW_MOCK_LOGIN", value = "1" }, # safe only because CloudFront restricts who can reach it
       { name = "ABDM_MODE", value = "sandbox" },
-      { name = "ABDM_PUBLIC_BASE_URL", value = "https://${var.domain_name}" },
-      { name = "CORS_ORIGIN", value = "https://${var.domain_name}" },
+      { name = "ABDM_PUBLIC_BASE_URL", value = "https://${aws_cloudfront_distribution.main.domain_name}" },
+      { name = "CORS_ORIGIN", value = "https://${aws_cloudfront_distribution.main.domain_name}" },
     ]
     secrets = [
       { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_url.arn },
@@ -142,5 +142,5 @@ resource "aws_ecs_service" "api" {
   }
   health_check_grace_period_seconds = 60
 
-  depends_on = [aws_lb_listener.https]
+  depends_on = [aws_lb_listener.http]
 }
