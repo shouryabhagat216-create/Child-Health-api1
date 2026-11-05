@@ -51,7 +51,15 @@ export default function App() {
     <>
       <div className={`banner${tab === 'sandbox' ? ' sandbox' : ''}`}>{tab === 'sandbox' ? 'ABDM SANDBOX · real calls to ABDM\'s test environment · use test identities only' : 'MOCK MODE · synthetic data only'}</div>
       <header className="topbar">
-        <h1>Child Health Dashboard</h1>
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 5.6a5.2 5.2 0 0 0-7.4 0L12 7l-1.4-1.4a5.2 5.2 0 0 0-7.4 7.4L12 21.6l8.8-8.6a5.2 5.2 0 0 0 0-7.4z" /><path d="M7 12h2.5l1.5-3 2 6 1.5-3H17" /></svg>
+          </span>
+          <h1>
+            <span className="brand-name">WOMB<b>TO</b>18</span>
+            <span className="brand-sub">Child Health prototype</span>
+          </h1>
+        </div>
         <div className="topbar-right">
           <HealthPill />
           <label className="scenario">
@@ -62,7 +70,8 @@ export default function App() {
           </label>
           {guardian && (
             <span className="user">
-              {guardian.displayName} <button onClick={logout}>Log out</button>
+              <span className="avatar-chip" aria-hidden="true">{guardian.displayName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}</span>
+              {guardian.displayName} <button className="quiet" onClick={logout}>Log out</button>
             </span>
           )}
         </div>

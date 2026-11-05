@@ -5,18 +5,23 @@ import { useRef, useState } from 'react';
 // Numbered progress: done steps get a tick, the current one is highlighted.
 export function Stepper({ steps, current }) {
   const at = steps.findIndex(([id]) => id === current);
+  const pad = (n) => String(n).padStart(2, '0');
   return (
-    <ol className="stepper" aria-label="Progress">
-      {steps.map(([id, label], i) => {
-        const state = i < at ? 'done' : i === at ? 'now' : 'todo';
-        return (
-          <li key={id} className={state} aria-current={state === 'now' ? 'step' : undefined}>
-            <span className="dot" aria-hidden="true">{state === 'done' ? '✓' : i + 1}</span>
-            <span className="label">{label}</span>
-          </li>
-        );
-      })}
-    </ol>
+    <>
+      <div className="stepper-bar" aria-hidden="true"><span style={{ width: `${((Math.max(at, 0) + 1) / steps.length) * 100}%` }} /></div>
+      <p className="stepcount">Step {pad(Math.max(at, 0) + 1)} of {pad(steps.length)}</p>
+      <ol className="stepper" aria-label="Progress">
+        {steps.map(([id, label], i) => {
+          const state = i < at ? 'done' : i === at ? 'now' : 'todo';
+          return (
+            <li key={id} className={state} aria-current={state === 'now' ? 'step' : undefined}>
+              <span className="dot" aria-hidden="true">{state === 'done' ? '✓' : i + 1}</span>
+              <span className="label">{label}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </>
   );
 }
 

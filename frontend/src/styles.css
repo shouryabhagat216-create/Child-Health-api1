@@ -1,13 +1,17 @@
 :root {
-  --bg: #f4f6fa; --card: #ffffff; --text: #1d2330; --muted: #667085; --border: #d8dce3;
-  --accent: #2457c5; --on-accent: #ffffff; --good: #1a7f4b; --warn: #a15c00; --bad: #b42318; --banner: #fff3cd;
+  /* WombTo18-style palette: pale green page, white cards, deep green primary, gold accent, red for emergencies */
+  --bg: #f1f6f1; --card: #ffffff; --text: #121a2e; --muted: #7b8798; --border: #e1e8e3;
+  --accent: #366d45; --on-accent: #ffffff; --gold: #e0a63a; --soft: #eaf2ec;
+  --good: #1b8a55; --warn: #b86b00; --bad: #d92d2d; --banner: #fff1d6;
+  --radius: 18px; --shadow: 0 6px 24px rgba(30, 70, 45, 0.07);
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #14171f; --card: #1d212c; --text: #e8eaf0; --muted: #98a1b3; --border: #343a4a;
-    --accent: #7aa2ff; --on-accent: #10131a; --good: #5fd39a; --warn: #f0b34a; --bad: #ff8a7a; --banner: #4a3d12; }
+  :root { --bg: #0f1a14; --card: #17241c; --text: #e8f0ea; --muted: #9db0a3; --border: #2a3d31;
+    --accent: #6fbf86; --on-accent: #0c1a11; --gold: #f0be5a; --soft: #1f3226;
+    --good: #5fd39a; --warn: #f0b34a; --bad: #ff8a7a; --banner: #4a3d12; --shadow: none; }
 }
 * { box-sizing: border-box; }
-body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+body { margin: 0; font: 15px/1.55 'Lexend', system-ui, sans-serif; background: var(--bg); color: var(--text); }
 h1 { margin: 0; font-size: 1.25rem; }
 h2 { margin: 0 0 6px; font-size: 1.1rem; }
 h3 { margin: 0 0 4px; font-size: 1rem; }
@@ -191,3 +195,68 @@ h2 + .lead { margin-top: 0; }
 .form .choice, .choices .choice, .form .check, .steps .check { display: flex; gap: 12px; font-size: inherit; }
 .form .check, .steps .check { gap: 8px; }
 .choice input[type=radio], .check input[type=checkbox] { flex: none; width: 18px; height: 18px; min-height: 0; margin-top: 3px; }
+
+
+/* ================= WombTo18 look ================= */
+h1, h2, h3 { font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.35rem; }
+body { background: linear-gradient(180deg, var(--bg), #fafcf9 70%); background-attachment: fixed; }
+@media (prefers-color-scheme: dark) { body { background: var(--bg); } }
+
+.banner { border-bottom: none; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.topbar { border-bottom: 1px solid var(--border); padding: 14px 24px; box-shadow: var(--shadow); }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: #24402f; color: #bfe3cc; }
+.brand-name { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: 1.5rem; color: var(--accent); letter-spacing: 0.01em; line-height: 1; }
+.brand-name b { color: var(--gold); font-weight: 700; }
+.brand-sub { display: block; font-family: 'Lexend', system-ui, sans-serif; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.avatar-chip { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 0.85rem; }
+
+.card, .childbar, .step { border-radius: var(--radius); box-shadow: var(--shadow); }
+.card { padding: 22px; }
+.step { border-radius: 14px; box-shadow: none; }
+.childbar { padding: 12px 20px; }
+.childbar label { font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+input, select { border-radius: 14px; padding: 9px 14px; border-color: var(--border); background: #f8fbf8; min-height: 44px; }
+@media (prefers-color-scheme: dark) { input, select { background: var(--bg); } }
+input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+label { color: var(--muted); }
+.form label, .field { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+.form label input, .form label select, .field input, .field select { text-transform: none; letter-spacing: 0; font-size: 0.95rem; font-weight: 400; color: var(--text); }
+.field .hint { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+button { border-radius: 14px; padding: 9px 18px; min-height: 44px; font-weight: 600; letter-spacing: 0.04em; border-width: 1.5px; transition: background .15s, color .15s, box-shadow .15s; }
+button.primary { box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 30%, transparent); letter-spacing: 0.12em; text-transform: uppercase; font-size: 0.8rem; }
+button.quiet, button.link, .tabs button { min-height: 0; }
+button.link { border-radius: 0; }
+
+.tabs { gap: 6px; border-bottom: none; padding: 5px; background: var(--soft); border-radius: 16px; }
+.tabs button { border: none; border-radius: 12px; padding: 9px 16px; font-size: 0.85rem; color: var(--muted); }
+.tabs button.active { background: var(--card); color: var(--text); box-shadow: 0 2px 8px rgba(30, 70, 45, 0.1); border-bottom: none; }
+.tabs button:hover:not(:disabled) { color: var(--accent); }
+.tabs.inner { margin: 14px 0; }
+
+.pill, .badge, .chip, .envchip, .progress li { letter-spacing: 0.04em; }
+.badge { border-radius: 999px; }
+.chip.done { background: var(--soft); }
+.profile { border-radius: 20px; background: var(--soft); border: none; }
+.profile header { border-bottom-color: color-mix(in srgb, var(--accent) 15%, transparent); }
+.avatar { background: var(--accent); }
+.choice { border-radius: 16px; background: #f8fbf8; padding: 14px 16px; }
+.choice.picked { background: var(--soft); box-shadow: none; border-width: 2px; }
+.alert { border-radius: 14px; }
+.codebox { border-radius: 16px; background: var(--soft); border-color: var(--accent); }
+.numbered .num, .stepper li.now .dot { background: var(--accent); }
+.num { background: var(--accent); }
+.terms { border-radius: 14px; }
+.json { border-radius: 14px; }
+.login { margin: 56px auto; }
+.cardbox img, .card-image { border-radius: 16px; }
+.notice { border-radius: 12px; border-left-color: var(--gold); background: var(--soft); }
+
+/* progress bar under the stepper, like the registration steps */
+.stepper-bar { height: 10px; border-radius: 999px; background: var(--soft); overflow: hidden; margin: 6px 0 4px; }
+.stepper-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .3s; }
+.stepcount { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+@media (max-width: 600px) { .topbar { padding: 12px 14px; } .card { padding: 16px; } .brand-name { font-size: 1.25rem; } }
