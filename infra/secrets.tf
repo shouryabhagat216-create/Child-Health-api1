@@ -14,7 +14,7 @@ resource "random_id" "state_key" {
 
 resource "aws_secretsmanager_secret" "database_url" {
   name                    = "${var.name}/database-url"
-  recovery_window_in_days = 0 # delete at once on destroy
+  recovery_window_in_days = var.db_protected ? 7 : 0 # demo: delete at once on destroy
 }
 
 resource "aws_secretsmanager_secret_version" "database_url" {
@@ -26,7 +26,7 @@ resource "aws_secretsmanager_secret_version" "database_url" {
 
 resource "aws_secretsmanager_secret" "jwt" {
   name                    = "${var.name}/jwt-secret"
-  recovery_window_in_days = 0
+  recovery_window_in_days = var.db_protected ? 7 : 0
 }
 
 resource "aws_secretsmanager_secret_version" "jwt" {
@@ -36,7 +36,7 @@ resource "aws_secretsmanager_secret_version" "jwt" {
 
 resource "aws_secretsmanager_secret" "state_key" {
   name                    = "${var.name}/state-encryption-key"
-  recovery_window_in_days = 0
+  recovery_window_in_days = var.db_protected ? 7 : 0
 }
 
 resource "aws_secretsmanager_secret_version" "state_key" {
@@ -46,7 +46,7 @@ resource "aws_secretsmanager_secret_version" "state_key" {
 
 resource "aws_secretsmanager_secret" "abdm_client_id" {
   name                    = "${var.name}/abdm-client-id"
-  recovery_window_in_days = 0
+  recovery_window_in_days = var.db_protected ? 7 : 0
 }
 
 resource "aws_secretsmanager_secret_version" "abdm_client_id" {
@@ -57,7 +57,7 @@ resource "aws_secretsmanager_secret_version" "abdm_client_id" {
 
 resource "aws_secretsmanager_secret" "abdm_client_secret" {
   name                    = "${var.name}/abdm-client-secret"
-  recovery_window_in_days = 0
+  recovery_window_in_days = var.db_protected ? 7 : 0
 }
 
 resource "aws_secretsmanager_secret_version" "abdm_client_secret" {

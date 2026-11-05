@@ -4,6 +4,10 @@
 
 data "aws_availability_zones" "available" {
   state = "available"
+  filter { # regular Availability Zones only (accounts with Local Zones enabled list those too)
+    name   = "zone-type"
+    values = ["availability-zone"]
+  }
 }
 
 locals {

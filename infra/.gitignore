@@ -4,3 +4,4 @@
 terraform.tfvars
 crash.log
 tfplan*
+wombto18.tfvars

@@ -1,7 +1,7 @@
 resource "aws_ecr_repository" "api" {
   name                 = var.name
   image_tag_mutability = "MUTABLE"
-  force_delete         = true # destroy removes the images too
+  force_delete         = !var.db_protected # demo: destroy removes the images too
   image_scanning_configuration { scan_on_push = true }
 }
 

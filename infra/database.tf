@@ -23,15 +23,17 @@ resource "aws_db_instance" "main" {
   password = random_password.db.result
   port     = 5432
 
-  multi_az               = false # demo: single-AZ
+  multi_az               = var.db_multi_az
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.db.id]
   publicly_accessible    = false
 
-  backup_retention_period    = 1
+  backup_retention_period    = var.db_protected ? 7 : 1
   auto_minor_version_upgrade = true
 
-  # One `terraform destroy` removes everything. Do not copy these two lines into a real environment.
-  deletion_protection = false
-  skip_final_snapshot = true
+  # Demo (db_protected = false): one `terraform destroy` removes everything. Real environment: the database
+  # cannot be deleted until protection is switched off, and a final snapshot is kept.
+  deletion_protection       = var.db_protected
+  skip_final_snapshot       = !var.db_protected
+  final_snapshot_identifier = var.db_protected ? "${var.name}-final" : null
 }

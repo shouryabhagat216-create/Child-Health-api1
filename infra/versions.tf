@@ -19,7 +19,7 @@ provider "aws" {
   default_tags {
     tags = {
       Project     = var.name
-      Environment = "staging-demo"
+      Environment = var.environment
       ManagedBy   = "terraform"
     }
   }

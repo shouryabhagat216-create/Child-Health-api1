@@ -1,5 +1,5 @@
 variable "region" {
-  description = "The project's single AWS Region (AWS Settings > View all projects > Overview > Additional info > Region). No default on purpose: confirm it first."
+  description = "AWS Region for every resource. No default on purpose: set it deliberately (the wombto18 account uses ap-south-1, Mumbai)."
   type        = string
 }
 
@@ -65,4 +65,22 @@ variable "db_allocated_storage" {
 variable "log_retention_days" {
   type    = number
   default = 14
+}
+
+variable "environment" {
+  description = "Value of the Environment tag."
+  type        = string
+  default     = "staging-demo"
+}
+
+variable "db_multi_az" {
+  description = "Standby database in a second Availability Zone (roughly doubles the database cost)."
+  type        = bool
+  default     = false
+}
+
+variable "db_protected" {
+  description = "true for a real environment: deletion protection on, a final snapshot is taken on destroy, 7 days of backups. false keeps the demo's one-command teardown."
+  type        = bool
+  default     = false
 }
