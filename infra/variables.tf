@@ -96,3 +96,9 @@ variable "domain_attach" {
   type        = bool
   default     = false
 }
+
+variable "alarm_email" {
+  description = "Address that receives CloudWatch alarm emails. null creates no alarms. AWS sends a confirmation link to it that must be clicked once."
+  type        = string
+  default     = null
+}
