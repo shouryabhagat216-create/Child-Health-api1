@@ -24,3 +24,18 @@ provider "aws" {
     }
   }
 }
+
+# CloudFront only accepts certificates from us-east-1; used only for the custom-domain certificate.
+provider "aws" {
+  alias   = "us_east_1"
+  region  = "us-east-1"
+  profile = var.aws_profile
+
+  default_tags {
+    tags = {
+      Project     = var.name
+      Environment = var.environment
+      ManagedBy   = "terraform"
+    }
+  }
+}

@@ -95,6 +95,7 @@ resource "aws_cloudfront_distribution" "main" {
   is_ipv6_enabled = false # viewers arrive over IPv4, which is what the address check understands
   comment         = var.name
   price_class     = "PriceClass_100"
+  aliases         = local.attach_domain ? [var.domain_name] : []
 
   origin {
     origin_id   = "alb"
@@ -130,6 +131,9 @@ resource "aws_cloudfront_distribution" "main" {
     geo_restriction { restriction_type = "none" }
   }
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = local.attach_domain ? null : true
+    acm_certificate_arn            = local.attach_domain ? aws_acm_certificate_validation.site[0].certificate_arn : null
+    ssl_support_method             = local.attach_domain ? "sni-only" : null
+    minimum_protocol_version       = local.attach_domain ? "TLSv1.2_2021" : null
   }
 }

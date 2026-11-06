@@ -1,5 +1,5 @@
 output "url" {
-  value = "https://${aws_cloudfront_distribution.main.domain_name}"
+  value = "https://${local.public_host}"
 }
 
 output "ecr_repository_url" {
@@ -18,4 +18,18 @@ output "abdm_secret_names" {
 
 output "log_group" {
   value = aws_cloudwatch_log_group.api.name
+}
+
+output "cloudfront_domain" {
+  description = "Point the custom hostname (CNAME) at this address in DNS"
+  value       = aws_cloudfront_distribution.main.domain_name
+}
+
+output "acm_validation_records" {
+  description = "Add these CNAME records in DNS so the certificate can be issued"
+  value = local.use_domain ? [for o in aws_acm_certificate.site[0].domain_validation_options : {
+    name  = o.resource_record_name
+    type  = o.resource_record_type
+    value = o.resource_record_value
+  }] : []
 }

@@ -84,3 +84,15 @@ variable "db_protected" {
   type        = bool
   default     = false
 }
+
+variable "domain_name" {
+  description = "Custom hostname for the public address (for example health-api.wombto18.org). null keeps the *.cloudfront.net address. Setting it requests a certificate (stage 1); the DNS records are added by hand wherever the domain's DNS is managed."
+  type        = string
+  default     = null
+}
+
+variable "domain_attach" {
+  description = "Stage 2: attach domain_name to CloudFront. Set true only after the certificate's validation record is in DNS, otherwise apply waits for validation."
+  type        = bool
+  default     = false
+}

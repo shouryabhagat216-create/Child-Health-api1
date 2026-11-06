@@ -96,8 +96,8 @@ resource "aws_ecs_task_definition" "api" {
       { name = "TRUST_PROXY", value = "2" },      # CloudFront and the load balancer
       { name = "ALLOW_MOCK_LOGIN", value = "1" }, # safe only because CloudFront restricts who can reach it
       { name = "ABDM_MODE", value = "sandbox" },
-      { name = "ABDM_PUBLIC_BASE_URL", value = "https://${aws_cloudfront_distribution.main.domain_name}" },
-      { name = "CORS_ORIGIN", value = "https://${aws_cloudfront_distribution.main.domain_name}" },
+      { name = "ABDM_PUBLIC_BASE_URL", value = "https://${local.public_host}" },
+      { name = "CORS_ORIGIN", value = "https://${local.public_host}" },
     ]
     secrets = [
       { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_url.arn },
